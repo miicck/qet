@@ -1,7 +1,9 @@
-from qet.params       import read_parameters
+from qet.params       import parameters
 from qet.logs         import log
-from qet.calculations import relax
+from qet.calculations import scf, relax
 
-params = read_parameters("test.in")
+params = parameters(filename="test.in")
+print(params)
 relax  = relax(params)
 print(relax.gen_input_file())
+#relax.run()

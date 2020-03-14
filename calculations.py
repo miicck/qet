@@ -1,3 +1,6 @@
+import os
+from qet.logs import log
+
 # Pad the equals signs in the input file
 # so they line up nicely :)
 def pad_input_file(s):
@@ -25,8 +28,7 @@ def input_geometry(params):
     # Atomic species card
     s += "\nATOMIC_SPECIES\n"
     for sp in params["species"]:
-        s += "{0}\n".format(sp)
-
+        s += "{0} {1} {2}\n".format(*sp)
 
     # Atomic positions card
     s += "\nATOMIC_POSITIONS (crystal)\n"
@@ -39,57 +41,134 @@ def input_geometry(params):
 
     return s
 
-
-class relax:
+# Get the control part of a pw.x input file
+def pw_control_input(params, calculation="scf", recover=False):
     
-    # Create a relax calculation from the
+    # Control namelist
+    s  = "&CONTROL\n"
+    s += "    calculation = '{0}',\n".format(calculation)
+    if recover: s += "    restart_mode = 'restart',\n"
+    s += params.to_input_line("outdir")
+    s += params.to_input_line("pseudo_dir")
+    s += params.to_input_line("forc_conv_thr")
+    s += "/\n\n"
+
+    # System namelist
+    s += "&SYSTEM\n"
+    s += params.to_input_line("ntyp")
+    s += params.to_input_line("nat")
+    s += params.to_input_line("ibrav")
+    s += params.to_input_line("ecutwfc")
+    s += params.to_input_line("ecutrho")
+    s += params.to_input_line("occupations")
+    s += params.to_input_line("smearing")
+    s += params.to_input_line("degauss")
+    s += "/\n\n"
+
+    # Electrons namelist
+    s += "&ELECTRONS\n"
+    s += params.to_input_line("mixing_beta")
+    s += params.to_input_line("conv_thr")
+    s += "/\n\n"
+
+    # Ions namelist
+    s += "&IONS\n"
+    s += params.to_input_line("ion_dynamics")
+    s += "/\n\n"
+
+    # Cell namelist
+    s += "&CELL\n"
+    s += params.to_input_line("cell_dynamics")
+    s += params.to_input_line("press")
+    s += params.to_input_line("press_conv_thr")
+    s += "/\n\n"
+
+    return s
+
+class calculation:
+    
+    # Create an scf calculation from the
     # given input parameters
     def __init__(self, in_params):
-
+        
         # Save the input parameters
         self.in_params = in_params
+    
+    # Run the calculation in the given directory
+    # with the given name, will check if the
+    # calculation exists and, if so, will attempt
+    # to continue it if it is incomplete
+    def run(self, filename=None, path="./"):
 
+        if filename is None:
+            filename = self.default_filename()
+        
+        # Remove trailing /'s from path
+        path = path.strip()
+        while path.endswith("/"): path = path[0:-1]
 
-    def gen_input_file(self, filename="relax.in"):
+        inf  = path+"/"+filename+".in"
+        outf = path+"/"+filename+".out"
+        
+        recover = os.path.isfile(outf)
+        if recover:
+            # Test to see if the calculation is complete
+            with open(outf) as f:
+                if "JOB DONE" in f.read():
+                    msg = "Calculation \"{0}\" is complete, skipping..."
+                    log(msg.format(outf))
+                    return
 
-        # Generate the input file for this calculation
-        # Control namelist
-        s  = "&CONTROL\n"
-        s += "    calculation = 'vc-relax',\n"
-        s += self.in_params.to_input_line("outdir")
-        s += self.in_params.to_input_line("pseudo_dir")
-        s += self.in_params.to_input_line("forc_conv_thr")
-        s += "/\n\n"
+        with open(inf, "w") as f:
+            f.write(self.gen_input_file(recover=recover))
 
-        # System namelist
-        s += "&SYSTEM\n"
-        s += self.in_params.to_input_line("ntyp")
-        s += self.in_params.to_input_line("nat")
-        s += self.in_params.to_input_line("ibrav")
-        s += self.in_params.to_input_line("ecutwfc")
-        s += self.in_params.to_input_line("ecutrho")
-        s += self.in_params.to_input_line("occupations")
-        s += self.in_params.to_input_line("smearing")
-        s += self.in_params.to_input_line("deguass")
-        s += "/\n\n"
+        cmd = "cd {0}; mpirun -np {1} {2} < {3} > {4}"
+        cmd = cmd.format(
+            path, self.in_params["cores_per_node"], 
+            self.exe(), inf, outf)
 
-        # Electrons namelist
-        s += "&ELECTRONS\n"
-        s += self.in_params.to_input_line("mixing_beta")
-        s += self.in_params.to_input_line("conv_thr")
-        s += "/\n\n"
+        log("Running:")
+        log(cmd)
+        os.system(cmd)
 
-        # Ions namelist
-        s += "&IONS\n"
-        s += self.in_params.to_input_line("ion_dynamics")
-        s += "/\n\n"
+class scf(calculation):
 
-        # Cell namelist
-        s += "&CELL\n"
-        s += self.in_params.to_input_line("cell_dynamics")
-        s += self.in_params.to_input_line("press")
-        s += self.in_params.to_input_line("press_conv_thr")
-        s += "/\n\n"
+    # The executable that carries out this calculation
+    def exe(self):
+        return "pw.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "scf"
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        # Control
+        s  = pw_control_input(self.in_params, 
+            calculation="scf", recover=recover)
+
+        # Geometry
+        s += input_geometry(self.in_params)
+
+        return pad_input_file(s)
+
+class relax(calculation):
+
+    # The executable that carries out this calculation
+    def exe(self):
+        return "pw.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "relax"
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        # Control
+        s  = pw_control_input(self.in_params, 
+            calculation="vc-relax", recover=recover)
 
         # Geometry
         s += input_geometry(self.in_params)

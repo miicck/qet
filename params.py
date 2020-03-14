@@ -1,7 +1,10 @@
 import os
-import numpy as np
-from constants import BOHR_TO_ANGSTROM
-from logs import log
+import numbers
+import numpy         as     np
+from   qet.constants import BOHR_TO_ANGSTROM
+from   qet.logs      import log
+from   qet.types     import str_to_type 
+from   qet.elements  import elements
 
 # A parameters object contains the specification
 # for the current calculation, including both the
@@ -10,7 +13,7 @@ from logs import log
 class parameters:
     
     # Default constructor
-    def __init__(self):
+    def __init__(self, filename=None):
 
         # Set the default parameters
         # any unspecified parameters will be left 
@@ -18,76 +21,87 @@ class parameters:
         # result in QE default values being used
         self.par = {}
 
-        self.par["outdir"]         = "./"          # outdir = working dir
-        self.par["ibrav"]          = 0             # no bravis-lattice index
-        self.par["ecutwfc"]        = 60            # plane-wave cutoff (Ry)
-        self.par["ecutrho"]        = 600           # density cutoff (Ry)
-        self.par["occupations"]    = "smearing"    # treat as metallic
-        self.par["deguass"]        = 0.02          # metal smearing width (Ry)
-        self.par["kpoint_spacing"] = 0.02          # kpoint spacing 2pi*0.02A^-1
+        self["outdir"]         = "./"          # outdir = working dir
+        self["ibrav"]          = 0             # no bravis-lattice index
+        self["ecutwfc"]        = 60            # plane-wave cutoff (Ry)
+        self["ecutrho"]        = 600           # density cutoff (Ry)
+        self["occupations"]    = "smearing"    # treat as metallic
+        self["degauss"]        = 0.02          # metal smearing width (Ry)
+        self["kpoint_spacing"] = 0.02          # kpoint spacing 2pi*0.02A^-1
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
         # script is running and nodes = 1
-        self.par["nodes"] = 1
+        self["nodes"] = 1
         try:
             import multiprocessing
-            self.par["cores_per_node"] = multiprocessing.cpu_count()
+            self["cores_per_node"] = multiprocessing.cpu_count()
         except ImportError:
-            self.par["cores_per_node"] = 1
+            self["cores_per_node"] = 1
 
         # Default the pseudopotential directory to
         # home/pseudopotentials if $HOME is defined
         # otherwise set to "./"
-        self.par["pseudo_dir"] = "./"
+        self["pseudo_dir"] = "./"
         if "HOME" in os.environ:
-            self.par["pseudo_dir"] = os.environ["HOME"]+"/pseudopotentials"
+            self["pseudo_dir"] = os.environ["HOME"]+"/pseudopotentials"
+
+        if not filename is None:
+            self.load_parameters(filename)
+
+    # Try to generate the parameter from
+    # the parameters we have
+    def gen_param(self, key):
+        
+        # Count the atoms
+        if key == "nat" : 
+            self["nat"] = len(self["atoms"])
+
+        # Count the atom types
+        elif key == "ntyp": 
+            self["ntyp"] = len(self["species"])
+
+        # Get a list of the species
+        # with masses and pseudo names
+        elif key == "species":
+            spec = []
+            for a in self["atoms"]: 
+                if a[0] in spec: continue
+                spec.append(a[0])
+
+            for i, s in enumerate(spec):
+                spec[i] = [s, elements[s]["AtomicMass"], s+".UPF"]
+
+            self["species"] = spec
+
+        # Generate the kpoint grid
+        elif key == "kpoint_grid":
+            rlat = np.linalg.inv(self["lattice"]).T
+            kps  = float(self["kpoint_spacing"])
+            b2k  = lambda b : int(np.linalg.norm(b)/kps)
+            self["kpoint_grid"] = [b2k(b) for b in rlat]
+
+        else:
+            # Could not generate, error out
+            exept = "Key \"{0}\" not found in parameters object."
+            raise ValueError(exept.format(key))
             
 
     # Get parameter values with []
     def __getitem__(self, key):
 
-        # Raise an error if the key isn't found
+        # Attempt to generate the
+        # parameter if key if not found
         if not key in self.par:
-
-            # Try to generate the parameter from
-            # the parameters we have
-            
-            # Count the atoms
-            if key == "nat" : 
-                self["nat"] = len(self["atoms"])
-
-            # Count the atom types
-            elif key == "ntyp": 
-                self["ntyp"] = len(self["species"])
-
-            # Get a list of the species
-            elif key == "species":
-                spec = []
-                for a in self["atoms"]: 
-                    if a[0].capitalize() in spec: continue
-                    spec.append(a[0].capitalize())
-                self["species"] = spec
-
-            # Generate the kpoint grid
-            elif key == "kpoint_grid":
-                rlat = np.linalg.inv(self["lattice"]).T
-                b2k  = lambda b : int(np.linalg.norm(b)/self["kpoint_spacing"])
-                self["kpoint_grid"] = [b2k(b) for b in rlat]
-
-            else:
-                # Could not generate, error out
-                exept = "Key \"{0}\" not found in parameters object."
-                raise ValueError(exept.format(key))
+            self.gen_param(key)
 
         return self.par[key]
 
-
     # Set parameter values with []
     def __setitem__(self, key, value):
-        
-        # Set the given parameter
-        self.par[key] = value
+
+        # Try to convert the value to the correct type
+        self.par[key] = str_to_type(value)
 
 
     # Convert a parameter to an input line in a QE file
@@ -100,31 +114,16 @@ class parameters:
         except:
             return ""
 
-        # Try to write an integer parameter
-        try:
-            fval = float(val)
-            ival = int(val)
-            # If the floating point value differs
-            # this was actually a float that has been
-            # truncated
-            if fval != float(ival): raise ValueError
-            return "    {0} = {1},\n".format(key, ival)
-        except: pass
+        # Bool type
+        if isinstance(val, bool):
+            if val: return "    {0} = .true.,\n".format(key)
+            else  : return "    {0} = .false.,\n".format(key)
 
-        # Try to write a float parameter
-        try:
-            val = float(val)
+        # Numeric types
+        if isinstance(val, numbers.Number):
             return "    {0} = {1},\n".format(key, val)
-        except: pass
 
-        # Write bool parameters
-        if val.lower().strip() == "true":
-            return "    {0} = .true.,\n".format(key)
-
-        if val.lower().strip() == "false":
-            return "    {0} = .false.,\n".format(key)
-
-        # Write string parameters
+        # String parameters
         return "    {0} = '{1}',\n".format(key, val)
 
 
@@ -133,7 +132,7 @@ class parameters:
 
         # Pad format string nicely
         maxl = max([len(p) for p in self.par])
-        fs   = "\n    {0:" + str(maxl) + "} : {1}"
+        fs   = "\n    {0:" + str(maxl) + "} : {1} ({2})"
         
         s  = "Parameters:"
         s += "\n(parameters not in this list will be left as the QE defaults.)"
@@ -142,32 +141,36 @@ class parameters:
             # Custom formatting for atoms
             if p == "atoms":
                 atoms = self.par["atoms"]
-                s += fs.format("atoms", len(atoms))
+                s += fs.format("atoms", len(atoms), "atoms")
                 afs = "\n        {0:3} {1:10.7f} {2:10.7f} {3:10.7f}"
                 for a in atoms:
-                    s += afs.format(a[0].capitalize(), *a[1])        
+                    s += afs.format(a[0], *a[1])        
                 continue
 
             # Custom formatting for lattice
             if p == "lattice":
                 lattice = self.par["lattice"]
-                s += fs.format("lattice", "")
+                s += fs.format("lattice", "", "matrix")
                 for l in lattice:
                     s += "\n        {0:10.7f} {1:10.7f} {2:10.7f}".format(*l)
                 continue
 
             # Output key : value
-            s += fs.format(p, self.par[p])
+            s += fs.format(p, self.par[p], type(self.par[p]))
         return s
 
     # Parse the crystal lattice from input file lines
     def parse_lattice(self, lines):
 
+        i_dealt_with = []
         for i, line in enumerate(lines):
 
             # Find the start of the lattice block
             if not line.startswith("lattice"):  
                 continue
+
+            # Log the lines that have been dealt with during this parsing
+            i_dealt_with.append(i)
 
             # Parse the lattice units
             if len(line.split()) < 2:
@@ -179,18 +182,25 @@ class parameters:
             # Parse the lattice
             lat = []
             for j in range(i+1, i+4):
+                i_dealt_with.append(j)
                 lat.append([factor*float(w) for w in lines[j].split()])
             self["lattice"] = np.array(lat)
             break
 
+        return i_dealt_with
+
     # Parse atom coordinates from input file lines
     def parse_atoms(self, lines):
 
+        i_dealt_with = []
         for i, line in enumerate(lines):
-
+            
             # Find start of atom block 
             if not line.startswith("atoms"):
                 continue
+
+            # Log the lines that have been dealt with during this parsing
+            i_dealt_with.append(i)
             
             # Parse the units the atoms are in
             if len(line.split()) < 2:
@@ -218,39 +228,57 @@ class parameters:
                 # Stop if we reach an empty line
                 if len(line) == 0: break
                 
-                name = line.split()[0]
+                i_dealt_with.append(j)
+                name = line.split()[0].capitalize()
                 pos  = [float(x) for x in line.split()[1:]]
                 pos  = np.dot(linv, pos) # Convert to fractional coords
                 atoms.append([name,pos])
 
             self["atoms"] = atoms
 
-def read_parameters(filename):
+        return i_dealt_with
 
-    # Create the default parameters object
-    params = parameters()
+    def load_parameters(self, filename):
 
-    # Read the file into lines
-    with open(filename) as f:
-        lines = f.read().split("\n")
+        # Read the file into lines
+        with open(filename) as f:
+            lines = f.read().split("\n")
 
-    # Parse the file, line by line
-    log("Reading parameters from {0}:".format(filename))
+        # Parse the file, line by line
+        log("Reading parameters from {0}:".format(filename))
 
-    # Loop over lines, use a while loop so
-    # i can be incremented by the parsing logic
-    for i in range(0, len(lines)):
-    
-        # Clean the line, remove comments/whitespace
-        line = lines[i]
-        line = line.lower()
-        for cc in ["#", "//", "!"]:
-            if line.find(cc) >= 0:
-                line = line[0:line.find(cc)]
-        line = line.strip()
-        lines[i] = line
+        # Loop over lines, use a while loop so
+        # i can be incremented by the parsing logic
+        for i in range(0, len(lines)):
+        
+            # Clean the line, remove comments/whitespace
+            line = lines[i]
+            line = line.lower()
+            for cc in ["#", "//", "!"]:
+                if line.find(cc) >= 0:
+                    line = line[0:line.find(cc)]
+            line = line.strip()
+            lines[i] = line
 
-    params.parse_lattice(lines)
-    params.parse_atoms(lines)
+        # Parse special sections
+        i_dealt_with = []
+        i_dealt_with.extend(self.parse_lattice(lines))
+        i_dealt_with.extend(self.parse_atoms(lines))
 
-    return params
+        # Assume the rest is simple key : value form
+        for i in range(0, len(lines)):
+
+            # Skip lines already dealt with
+            # and blank lines
+            if i in i_dealt_with:  continue
+            if len(lines[i]) == 0: continue
+
+            # Parse key-value pair
+            spl = lines[i].split()
+            if len(spl) != 2:
+                exept = "Could not parse the line {0} as a key-value pair!"
+                raise ValueError(exept.format(lines[i]))
+
+            self[spl[0]] = spl[1]
+
+        log(self)
