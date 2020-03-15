@@ -27,7 +27,8 @@ class parameters:
         self["ecutrho"]        = 600           # density cutoff (Ry)
         self["occupations"]    = "smearing"    # treat as metallic
         self["degauss"]        = 0.02          # metal smearing width (Ry)
-        self["kpoint_spacing"] = 0.02          # kpoint spacing 2pi*0.02A^-1
+        self["qpoint_spacing"] = 0.1           # qpoint spacing (2pi A^-1)
+        self["kpts_per_qpt"]   = 6             # ratio of kpt to qpt grid
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -74,12 +75,37 @@ class parameters:
 
             self["species"] = spec
 
+        # Generate the qpoint grid
+        elif key == "qpoint_grid":
+            
+            # Generate qpoint grid from spacing
+            rlat = np.linalg.inv(self["lattice"]).T
+            qps  = float(self["qpoint_spacing"])
+            b2q  = lambda b : int(np.linalg.norm(b)/qps)
+            self["qpoint_grid"] = [b2q(b) for b in rlat]
+
         # Generate the kpoint grid
         elif key == "kpoint_grid":
-            rlat = np.linalg.inv(self["lattice"]).T
-            kps  = float(self["kpoint_spacing"])
-            b2k  = lambda b : int(np.linalg.norm(b)/kps)
-            self["kpoint_grid"] = [b2k(b) for b in rlat]
+
+            if "kpts_per_qpt" in self.par:
+
+                # Generate kpoint grid from qpoint grid
+                kpq = self["kpts_per_qpt"] 
+                qpg = self["qpoint_grid"]
+                self["kpoint_grid"] = [kpq * q for q in qpg]
+
+            elif "kpoint_spacing" in self.par:
+
+                # Generate kpoint grid from spacing
+                rlat = np.linalg.inv(self["lattice"]).T
+                kps  = float(self["kpoint_spacing"])
+                b2k  = lambda b : int(np.linalg.norm(b)/kps)
+                self["kpoint_grid"] = [b2k(b) for b in rlat]
+
+            else:
+
+                msg = "Could not generate k-point grid from parameter set."
+                raise RuntimeError(msg)
 
         else:
             # Could not generate, error out

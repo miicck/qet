@@ -174,3 +174,32 @@ class relax(calculation):
         s += input_geometry(self.in_params)
 
         return pad_input_file(s)
+
+class phonon_grid(calculation):
+
+    # The executable that carries out this calculation
+    def exe(self):
+        return "ph.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "phonons"
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        qpg = self.in_params["qpoint_grid"]
+
+        s  = "Calculate phonons on a coarse grid\n"
+        s += "&INPUTPH\n"
+        s += self.in_params.to_input_line("outdir")
+        s += "    ldisp=.true.,\n"
+        s += "    nq1= {0},\n".format(qpg[0])
+        s += "    nq2= {0},\n".format(qpg[1])
+        s += "    nq3= {0},\n".format(qpg[1])
+        s += "/\n"
+
+        # I've found ph.x sometimes crashes if 
+        # the input file doesn't end in a blank line
+        return pad_input_file(s) + "\n"
+    

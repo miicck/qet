@@ -1,6 +1,7 @@
 ecutwfc 20
 ecutrho 200
-kpoint_spacing 0.05
+qpoint_spacing 0.2
+kpts_per_qpt 4
 
 lattice angstrom
 4 0 0
