@@ -228,11 +228,22 @@ class proj_dos_out(output_file):
         # Get the directory of this calculation
         dos_dir  = os.path.dirname(filename)
 
+        # Attempt to find either an scf, or relax calculation
+        # to parse the fermi energy from
+        if os.path.isfile(dos_dir+"/scf.out"):
+            scf = scf_out(dos_dir+"/scf.out")
+            self["fermi energy"] = scf["fermi energy"]
+
+        elif os.path.isfile(dos_dir+"/relax.out"):
+            rel =  relax_out(dos_dir+"/relax.out")
+            self["fermi energy"] = rel["fermi energy"]
+
         # Parse all of the pdos files
-        self["PDOS (energy)"]   = {}
-        self["PDOS energies"]   = {}
-        self["PDOS wfc names"]  = {}
-        self["PDOS atom names"] = {}
+        self["PDOS (energy)"]       = {}
+        self["PDOS energies"]       = {}
+        self["PDOS wfc names"]      = {}
+        self["PDOS atom names"]     = {}
+        self["PDOS (fermi energy)"] = {}
 
         for f in os.listdir(dos_dir):
             if not f.startswith("pwscf.pdos_atm"): continue
@@ -262,13 +273,28 @@ class proj_dos_out(output_file):
 
             # Initialize dictionaries
             if not atom_num in self["PDOS energies"]:
-                self["PDOS energies"][atom_num]   = {}
-                self["PDOS (energy)"][atom_num]   = {}
-                self["PDOS wfc names"][atom_num]  = {}
-                self["PDOS atom names"][atom_num] = {}
+                self["PDOS energies"][atom_num]       = {}
+                self["PDOS (energy)"][atom_num]       = {}
+                self["PDOS wfc names"][atom_num]      = {}
+                self["PDOS atom names"][atom_num]     = {}
+                self["PDOS (fermi energy)"][atom_num] = {}
 
             # Fill dictionaries
             self["PDOS energies"][atom_num][wfc_num]   = energies
             self["PDOS (energy)"][atom_num][wfc_num]   = ldos
             self["PDOS wfc names"][atom_num][wfc_num]  = wfc_name
             self["PDOS atom names"][atom_num][wfc_num] = atom_name
+
+            # Calculate the DOS at the fermi level for
+            # each atom and wavefunction
+            if "fermi energy" in self.dict:
+                fermi_e = self["fermi energy"]
+                for i, e in enumerate(energies):
+                    if e > fermi_e:
+                        # Linearly interpolate to get the dos 
+                        # at the fermi energy
+                        k = "PDOS (fermi energy)"
+                        f = (fermi_e - energies[i-1])/(e - energies[i-1])
+                        d = ldos[i] * f + ldos[i-1] * (1-f)
+                        self[k][atom_num][wfc_num] = d
+                        break
