@@ -229,8 +229,11 @@ class proj_dos_out(output_file):
         dos_dir  = os.path.dirname(filename)
 
         # Parse all of the pdos files
-        self["PDOS (energy)"] = {}
-        self["PDOS energies"] = {}
+        self["PDOS (energy)"]   = {}
+        self["PDOS energies"]   = {}
+        self["PDOS wfc names"]  = {}
+        self["PDOS atom names"] = {}
+
         for f in os.listdir(dos_dir):
             if not f.startswith("pwscf.pdos_atm"): continue
 
@@ -257,7 +260,15 @@ class proj_dos_out(output_file):
                     energies.append(e * EV_TO_RY)
                     ldos.append(l)
 
-            self["PDOS energies"][atom_num] = {}
-            self["PDOS (energy)"][atom_num] = {}
-            self["PDOS energies"][atom_num][wfc_num] = energies
-            self["PDOS (energy)"][atom_num][wfc_num] = ldos
+            # Initialize dictionaries
+            if not atom_num in self["PDOS energies"]:
+                self["PDOS energies"][atom_num]   = {}
+                self["PDOS (energy)"][atom_num]   = {}
+                self["PDOS wfc names"][atom_num]  = {}
+                self["PDOS atom names"][atom_num] = {}
+
+            # Fill dictionaries
+            self["PDOS energies"][atom_num][wfc_num]   = energies
+            self["PDOS (energy)"][atom_num][wfc_num]   = ldos
+            self["PDOS wfc names"][atom_num][wfc_num]  = wfc_name
+            self["PDOS atom names"][atom_num][wfc_num] = atom_name
