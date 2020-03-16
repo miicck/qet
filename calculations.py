@@ -1,6 +1,7 @@
 import os
+import subprocess
 from   qet.logs   import log
-from   qet.parser import scf_out, relax_out
+from   qet.parser import scf_out, relax_out, phonon_grid_out, dos_out, proj_dos_out
 
 # Pad the equals signs in the input file
 # so they line up nicely :)
@@ -86,6 +87,18 @@ def pw_control_input(params, calculation="scf", recover=False):
 
     return s
 
+# Returns True if the given file is a completed
+# quantum espresso output
+def is_complete(filename):
+    if not os.path.isfile(filename):
+        return False
+    with open(filename) as f:
+        return "JOB DONE" in f.read()
+
+##################
+#  CALCULATIONS  #
+##################
+
 class calculation:
     
     # Create an scf calculation from the
@@ -111,19 +124,17 @@ class calculation:
         inf  = path+"/"+filename+".in"
         outf = path+"/"+filename+".out"
         
-        recover  = os.path.isfile(outf)
-        complete = False
-        if recover:
-            # Test to see if the calculation is complete
-            with open(outf) as f:
-                if "JOB DONE" in f.read():
-                    msg = "Calculation \"{0}\" is complete, skipping..."
-                    log(msg.format(outf))
-                    complete = True
+        # Test to see if the calculation is complete
+        if is_complete(outf):
 
-        if not complete:
+            # Log that we are skipping this complete calculation
+            msg = "Calculation \"{0}\" is complete, skipping..."
+            log(msg.format(outf))
+
+        else: # Calculation not complete
 
             # Create input file, run calculation
+            recover  = os.path.isfile(outf)
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
 
@@ -132,13 +143,25 @@ class calculation:
                 path, self.in_params["cores_per_node"], 
                 self.exe(), inf, outf)
 
-            log("Running:")
-            log(cmd)
-            os.system(cmd)
+            log("Running:\n"+cmd)
+            try:
+                # Run calculation, log stdout/stderr
+                stdout = subprocess.check_output([cmd], stderr=subprocess.STDOUT, shell=True)
+                log(stdout, filename="qet.stdout")
+            except subprocess.CalledProcessError as e:
+                # Log subprocess errror
+                log(e)
+
+            if not is_complete(outf):
+                msg = "Calculation {0} did not complete, stopping!"
+                msg = msg.format(outf)
+                log(msg)
+                raise RuntimeError(msg)
 
         # Parse the output
         return self.parse_output(outf)
 
+# A simple SCF calculation
 class scf(calculation):
 
     # The executable that carries out this calculation
@@ -165,6 +188,60 @@ class scf(calculation):
 
         return pad_input_file(s)
 
+
+# Calculate the electronic DOS
+class dos(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "dos.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "dos"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return dos_out(outf)
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        s  = "&DOS\n"
+        s += self.in_params.to_input_line("outdir")
+        s += self.in_params.to_input_line("degauss")
+        s += self.in_params.to_input_line("DeltaE")
+        s += "/\n"
+
+        return pad_input_file(s)
+
+# Calculate the atom-projected electronic DOS
+class proj_dos(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "projwfc.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "proj_dos"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return proj_dos_out(outf)
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        s  = "&PROJWFC\n"
+        s += self.in_params.to_input_line("outdir")
+        s += self.in_params.to_input_line("degauss")
+        s += self.in_params.to_input_line("DeltaE")
+        s += "/\n"
+
+        return pad_input_file(s)
+
+# Carry out a geometry optimization (vc-relax)
 class relax(calculation):
 
     # The executable that carries out this calculation
@@ -191,6 +268,7 @@ class relax(calculation):
 
         return pad_input_file(s)
 
+# Calculate phonons on a grid
 class phonon_grid(calculation):
 
     # The executable that carries out this calculation
@@ -213,10 +291,12 @@ class phonon_grid(calculation):
         s  = "Calculate phonons on a coarse grid\n"
         s += "&INPUTPH\n"
         s += self.in_params.to_input_line("outdir")
-        s += "    ldisp= .true.,\n"
-        s += "    nq1= {0},\n".format(qpg[0])
-        s += "    nq2= {0},\n".format(qpg[1])
-        s += "    nq3= {0},\n".format(qpg[1])
+        if recover:
+            s += "    recover = .true.,\n"
+        s += "    ldisp = .true.,\n"
+        s += "    nq1 = {0},\n".format(qpg[0])
+        s += "    nq2 = {0},\n".format(qpg[1])
+        s += "    nq3 = {0},\n".format(qpg[1])
         s += "/\n"
 
         # I've found ph.x sometimes crashes if 

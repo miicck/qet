@@ -1,4 +1,6 @@
-from qet.constants import EV_TO_RY, KBAR_AU3_TO_RY
+from   qet.constants import EV_TO_RY, KBAR_AU3_TO_RY
+from   qet.logs      import log
+import os
 
 # Base class for output file types
 class output_file:
@@ -36,10 +38,16 @@ class output_file:
                     string += lfs.format(*l)
                 continue
 
+            # Custom formatting for DOS things
+            if k.startswith("DOS") or k.startswith("PDOS"):
+                dfs = "length = {0}"
+                dfs = dfs.format(len(self.dict[k]))
+                string += fs.format(k, dfs)
+                continue
+
             string += fs.format(k, self.dict[k])
 
         return string.strip()
-            
 
     def __getitem__(self, key):
 
@@ -168,4 +176,88 @@ class relax_out(output_file):
                         vec  = [float(w) for w in lines[j].split()[1:4]]
                         atoms.append([name, vec])
                     self["relaxed atoms"] = atoms
-                        
+
+class phonon_grid_out(output_file):
+    
+    def parse(self, filename):
+        pass
+
+class dos_out(output_file):
+    
+    def parse(self, filename):
+
+        # Get the directory of this calculation
+        dos_dir  = os.path.dirname(filename)
+        dos_file = dos_dir + "/pwscf.dos" 
+
+        # Throw an error if the .dos file doesn't exist
+        if not os.path.isfile(dos_file):
+            msg = "Could not find the DOS file {0}"
+            msg = msg.format(dos_file)
+            log(msg)
+            raise RuntimeError(msg)
+        
+        # Parse the .dos file
+        energies  = []
+        densities = []
+        first_line = True
+        with open(dos_file) as f:
+            for line in f:
+
+                # Skip the first line
+                if first_line:
+                    fermi_energy  = float(line.split()[-2])
+                    fermi_energy *= EV_TO_RY 
+                    first_line    = False
+                    continue
+
+                # Parse the energy and density
+                e, d = [float(w) for w in line.split()[0:2]]
+                energies.append(e * EV_TO_RY)
+                densities.append(d)
+
+        # Store the results
+        self["DOS energies"] = energies
+        self["DOS (energy)"] = densities
+        self["fermi energy"] = fermi_energy
+
+class proj_dos_out(output_file):
+    
+    def parse(self, filename):
+
+        # Get the directory of this calculation
+        dos_dir  = os.path.dirname(filename)
+
+        # Parse all of the pdos files
+        self["PDOS (energy)"] = {}
+        self["PDOS energies"] = {}
+        for f in os.listdir(dos_dir):
+            if not f.startswith("pwscf.pdos_atm"): continue
+
+            # Parse projection details from filename
+            atom_num  = int(f.split("#")[1].split("(")[0])
+            atom_name = f.split("(")[1].split(")")[0]
+            wfc_num   = int(f.split("#")[2].split("(")[0])
+            wfc_name  = f.split("(")[2].split(")")[0]
+
+            energies  = []
+            ldos      = []
+
+            # Parse the actual PDOS from the file
+            with open(dos_dir + "/" + f) as pdos:
+                first_line = True
+                for line in pdos:
+                    
+                    # Skip the first line
+                    if first_line:
+                        first_line = False
+                        continue
+
+                    e,l = [float(w) for w in line.split()[0:2]]
+                    energies.append(e * EV_TO_RY)
+                    ldos.append(l)
+
+            self["PDOS energies"][atom_num] = {}
+            self["PDOS (energy)"][atom_num] = {}
+            self["PDOS energies"][atom_num][wfc_num] = energies
+            self["PDOS (energy)"][atom_num][wfc_num] = ldos
