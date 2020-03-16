@@ -1,5 +1,6 @@
 import os
-from qet.logs import log
+from   qet.logs   import log
+from   qet.parser import scf_out, relax_out
 
 # Pad the equals signs in the input file
 # so they line up nicely :)
@@ -110,26 +111,33 @@ class calculation:
         inf  = path+"/"+filename+".in"
         outf = path+"/"+filename+".out"
         
-        recover = os.path.isfile(outf)
+        recover  = os.path.isfile(outf)
+        complete = False
         if recover:
             # Test to see if the calculation is complete
             with open(outf) as f:
                 if "JOB DONE" in f.read():
                     msg = "Calculation \"{0}\" is complete, skipping..."
                     log(msg.format(outf))
-                    return
+                    complete = True
 
-        with open(inf, "w") as f:
-            f.write(self.gen_input_file(recover=recover))
+        if not complete:
 
-        cmd = "cd {0}; mpirun -np {1} {2} < {3} > {4}"
-        cmd = cmd.format(
-            path, self.in_params["cores_per_node"], 
-            self.exe(), inf, outf)
+            # Create input file, run calculation
+            with open(inf, "w") as f:
+                f.write(self.gen_input_file(recover=recover))
 
-        log("Running:")
-        log(cmd)
-        os.system(cmd)
+            cmd = "cd {0}; mpirun -np {1} {2} < {3} > {4}"
+            cmd = cmd.format(
+                path, self.in_params["cores_per_node"], 
+                self.exe(), inf, outf)
+
+            log("Running:")
+            log(cmd)
+            os.system(cmd)
+
+        # Parse the output
+        return self.parse_output(outf)
 
 class scf(calculation):
 
@@ -140,6 +148,10 @@ class scf(calculation):
     # The default filename for calculations of this type
     def default_filename(self):
         return "scf"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return scf_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -163,6 +175,10 @@ class relax(calculation):
     def default_filename(self):
         return "relax"
 
+    # Parse calculation output
+    def parse_output(self, outf):
+        return relax_out(outf)
+
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
 
@@ -185,6 +201,10 @@ class phonon_grid(calculation):
     def default_filename(self):
         return "phonons"
 
+    # Parse calculation output
+    def parse_output(self, outf):
+        return phonon_grid_out(outf)
+
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
 
@@ -193,7 +213,7 @@ class phonon_grid(calculation):
         s  = "Calculate phonons on a coarse grid\n"
         s += "&INPUTPH\n"
         s += self.in_params.to_input_line("outdir")
-        s += "    ldisp=.true.,\n"
+        s += "    ldisp= .true.,\n"
         s += "    nq1= {0},\n".format(qpg[0])
         s += "    nq2= {0},\n".format(qpg[1])
         s += "    nq3= {0},\n".format(qpg[1])
