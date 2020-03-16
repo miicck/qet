@@ -1,2 +1,4 @@
-*.swp
-__pycache__
+*.swp         # Ignore swap files from vim
+test/         # Ignore test directory
+__pycache__   # Ignore compiled python files
+*.pyc
