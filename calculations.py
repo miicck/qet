@@ -222,4 +222,3 @@ class phonon_grid(calculation):
         # I've found ph.x sometimes crashes if 
         # the input file doesn't end in a blank line
         return pad_input_file(s) + "\n"
-    

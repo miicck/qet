@@ -3,8 +3,8 @@ import numpy      as     np
 
 # A cubic phase of the hydride superconductor La H_10
 # relaxed at 2500 KBar
-lah10_fm3m = parameters()
-lah10_fm3m["press"] = 2500
+lah10_fm3m                   = parameters()
+lah10_fm3m["press"]          = 2500
 
 lat = []
 lat.append([0.000000000,   2.422122552,   2.422122552])
