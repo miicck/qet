@@ -107,6 +107,13 @@ class calculation:
         
         # Save the input parameters
         self.in_params = in_params
+
+    # Get the string reperesentation of this
+    # calculation <=> input file
+    def __str__(self):
+        s  = self.default_filename()+".in:\n"
+        s += self.gen_input_file()
+        return s
     
     # Run the calculation in the given directory
     # with the given name, will check if the

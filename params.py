@@ -71,7 +71,7 @@ class parameters:
                 spec.append(a[0])
 
             for i, s in enumerate(spec):
-                spec[i] = [s, elements[s]["AtomicMass"], s+".UPF"]
+                spec[i] = [s, elements[s]["mass number"], s+".UPF"]
 
             self["species"] = spec
 
