@@ -74,7 +74,7 @@ data = [
 [71 ,"Lutetium     ","Lu",174.967,104,0],
 [72 ,"Hafnium      ","Hf",178.49 ,106,0],
 [73 ,"Tantalum     ","Ta",180.948,108,0],
-[74 ,"Wolfram      ","W ",183.84 ,110,0],
+[74 ,"Tungsten     ","W ",183.84 ,110,0],
 [75 ,"Rhenium      ","Re",186.207,111,0],
 [76 ,"Osmium       ","Os",190.23 ,114,0],
 [77 ,"Iridium      ","Ir",192.217,115,0],
@@ -128,6 +128,8 @@ for dat in data:
     for i in range(0, len(titles)):
         if isinstance(dat[i], str):
             dat[i] = dat[i].strip()
+        if titles[i] == "radioactive":
+            dat[i] = (dat[i] > 0)
         d[titles[i]] = dat[i]
     elements[dat[2]] = d
 
