@@ -12,10 +12,111 @@ from scipy.optimize   import minimize
 
 PSEUDO_DIR = "/home/mjh261/rds/rds-t2-cs084/pseudopotentials/gbrv"
 
-def get_platonic_hydrogens(nh, scale=0.3333333333):
+# Generate hydrogen cages around e1 and e2 with radii equal to the
+# covalent radius of e1 and e2 respectively. The ratio of the  number 
+# of hydrogens on e1 to the number of hydrogens on e2 is equal to the
+# ratio of covalent radii squared. These cages are then optimzied w.r.t
+# a lennard-jones pair potnetial.
+def generate_preoptimized_structure(e1, e2, n1, n2, nh):
+
+    # Create a list of the non-hydrogen elements
+    es = []
+    for i in range(0, n1): es.append(e1)
+    for i in range(0, n2): es.append(e2)
+
+    # Set the number of hydrogens for each element proportional
+    # to the covalent radius of the element
+    cs   = [elements[e]["covalent radius"] for e in es]
+    norm = sum([c**2.0 for c in cs])
+    nhs  = [float(nh)*(c**2.0)/norm for c in cs]
+    nhs  = [int(round(x)) for x in nhs]
+
+    # If we have too many hydrogens, remove
+    # one from the atom with the largest covalent radius
+    if sum(nhs) == nh + 1:
+        imax       = cs.index(max(cs))
+        nhs[imax] -= 1
+    
+    # If we have too few hydrogens, remove one
+    # from the atom with the smallest covalent radius
+    if sum(nhs) == nh - 1:
+        imin       = cs.index(min(cs))
+        nhs[imin] += 1
+
+    if sum(nhs) != nh:
+        raise Exception("Incorrect number of hydrogens produed!")
+
+    # Place each element in the cell, accompanied by it's
+    # cluster of hydrogens
+    raise Exception("Not implemented!")
+
+    print(nh, sum(nhs), cs, nhs)
+
+# Generate a ternary structure such that each of the
+# non-hydrogen elements sees the same hydrogen environmnet
+def generate_structure_unbiased(e1, e2, n1, n2, nh, volume_guess):
+
+    raise Exception("Implementation unfinished!")
+
+    # These cases are not implemented
+    if n1 != n2:    return None 
+    if nh % 2 != 0: return None
+
+    # Place the two non-hydrogen atoms on
+    # two interpenetrating simple-cubic lattices
+    atoms = [
+        [e1,[0.0,0.0,0.0]],
+        [e2,[0.5,0.5,0.5]]
+    ]
+
+    # We can only do even numbers of hydrogens
+    # because the environment around the first
+    # atom must be the same as the environment
+    # around the second atom
+
+    if   nh == 2:
+        # Hydrogens either side of central atom
+        atoms.extend([
+            # Around first atom
+            ["H",[0.25,0.25,0.25]],
+            # Around second atom
+            ["H",[0.75,0.75,0.75]]
+        ])
+
+    elif nh == 4:
+        # The hydrogens are in a diagonal 
+        # square around the central atom
+        atoms.extend([
+            # Around first atom
+            ["H",[0.25,0.25,0.25]],
+            ["H",[0.25,0.25,0.75]],
+            # Around second atom
+            ["H",[0.75,0.75,0.25]],
+            ["H",[0.75,0.75,0.75]],
+        ])
+
+    elif nh == 6:
+        # The hydrogens are in an octahedron
+        # around the central atom
+        atoms.extend([
+            # Around the first atom
+            ["H",[0.5, 0.0, 0.0]],
+            ["H",[0.0, 0.5, 0.0]],
+            ["H",[0.0, 0.0, 0.5]],
+        ])
+    
+    par            = parameters()
+    alat           = volume_guess ** (1.0/3.0)
+    par["atoms"]   = atoms
+    par["lattice"] = [[alat,0,0],[0,alat,0],[0,0,alat]]
+
+def get_platonic_hydrogens(nh, scale=0.3333333333, centre=[0.5,0.5,0.5]):
 
     # Scale of the displacement from the centre
     a = scale
+
+    # The centre of the platonic solid
+    x,y,z = centre
 
     # Golden ratio
     p = (1.0 + 5.0**0.5)/2.0
@@ -125,7 +226,10 @@ def get_platonic_hydrogens(nh, scale=0.3333333333):
 
 
 # Fill in hydrogens using platonic solids.
-def generate_structure_platonic(e1, e2, n1, n2, nh):
+def generate_structure_platonic(e1, e2, n1, n2, nh, volume_guess):
+
+    # Estimate the lattice length based on the estimated volume
+    alat = volume_guess**(1.0/3.0)
 
     # Equal n1, n2 case
     if n1 == n2:
@@ -161,7 +265,7 @@ def generate_structure_platonic(e1, e2, n1, n2, nh):
             return None
 
         par = parameters()
-        par["lattice"] = [[10,0,0],[0,10,0],[0,0,10]]
+        par["lattice"] = [[alat,0,0],[0,alat,0],[0,0,alat]]
         par["atoms"]   = atoms
         return par
         
@@ -171,7 +275,19 @@ def generate_structure_platonic(e1, e2, n1, n2, nh):
 # Returns a parameter set with a structure
 # with the given stochiometry
 def generate_structure(e1, e2, n1, n2, nh):
-    return generate_structure_platonic(e1, e2, n1, n2, nh)
+
+    return generate_preoptimized_structure(e1, e2, n1, n2, nh)
+
+    # Estimate the volume based on the covalent radius
+    v1 =  elements[e1]["covalent radius"] ** 3
+    v2 =  elements[e2]["covalent radius"] ** 3
+    vh = elements["H"]["covalent radius"] ** 3
+    volume_guess  = n1*v1 + n2*v2 + nh*vh
+    volume_guess *= 4.0*3.14159/3.0 # 4/3 pi
+    volume_guess *= 5.0 # This factor is from tests
+
+    return generate_structure_unbiased(e1, e2, n1, n2, nh, volume_guess)
+    #return generate_structure_platonic(e1, e2, n1, n2, nh, volume_guess)
 
 # Run a particular ternary hydride
 # with stoichiometry e1_n1 e2_n2 H_nh

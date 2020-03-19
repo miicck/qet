@@ -145,7 +145,7 @@ class calculation:
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
 
-            cmd = "cd {0}; mpirun -np {1} {2} < {3} > {4}"
+            cmd = "cd {0}; mpirun -np {1} {2} -i {3} > {4}"
             cmd = cmd.format(
                 path, self.in_params["cores_per_node"], 
                 self.exe(), inf, outf)
