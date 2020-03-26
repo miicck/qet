@@ -5,6 +5,7 @@ from   qet.constants  import BOHR_TO_ANGSTROM
 from   qet.logs       import log
 from   qet.type_tools import str_to_type 
 from   qet.elements   import elements
+from   collections    import defaultdict
 
 # A parameters object contains the specification
 # for the current calculation, including both the
@@ -77,7 +78,7 @@ class parameters:
 
         # Get a dictionary of the form atom name : count
         elif key == "atom_counts":
-            atom_counts = {}
+            atom_counts = defaultdict(lambda: 0)
             for a in self["atoms"]:
                 if a[0] in atom_counts: atom_counts[a[0]] += 1
                 else: atom_counts[a[0]] = 1

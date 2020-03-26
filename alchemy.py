@@ -1,7 +1,7 @@
 from qet.elements import atom_substitutions, elements
 from qet.params   import parameters
 from qet.logs     import log
-import random, os
+import os, copy, random
 
 class alch_structure:
 
@@ -13,8 +13,8 @@ class alch_structure:
         mutating=None):
         
         self.params = parameters()
-        self.params["lattice"] = lattice
-        self.params["atoms"]   = atoms
+        self.params["lattice"] = copy.deepcopy(lattice)
+        self.params["atoms"]   = copy.deepcopy(atoms)
 
         # We're mutating a structure, copy various
         # parameters from it
@@ -56,9 +56,10 @@ class alch_structure:
         tot = 0
         for o in options:
             tot += options[o]
-            if tot > rnd: return o
+            if tot >= rnd: return o
 
-        raise Exception("No substitute atom found!")
+        print(tot, rnd, sum([options[o] for o in options]))
+        raise Exception("No substitute atom found for {0} in {1}!".format(e, options))
 
 
     # Propose a mutation type
@@ -98,7 +99,7 @@ class alch_structure:
             sub = self.get_substitute(to_replace)
 
             # Create a new set of atoms with the replacement
-            new_atoms = self.params["atoms"].copy()
+            new_atoms = copy.deepcopy(self.params["atoms"])
             for i, a in enumerate(new_atoms):
                 if a[0] == to_replace: new_atoms[i][0] = sub
 
@@ -112,18 +113,18 @@ class alch_structure:
                 return None
 
             # Copy the atom list and remove a random atom from the result
-            new_atoms = self.params["atoms"].copy()
+            new_atoms = copy.deepcopy(self.params["atoms"])
             i_rem     = random.randrange(len(new_atoms))
-            log("removing atom {0} {1} in {2}".format(i_rem, new_atoms[i_rem], self.name), "alchemy.log")
+            log("removing atom {0} in {2}\n    Removed {1}".format(i_rem, new_atoms[i_rem], self.name), "alchemy.log")
             del new_atoms[i_rem]
             return alch_structure(self.params["lattice"], new_atoms, mutating=self) 
 
         if mutation == "dupe_random_atom":
             
             # Copy a random atom
-            new_atoms = self.params["atoms"].copy()
+            new_atoms = copy.deepcopy(self.params["atoms"])
             i_dupe    = random.randrange(len(new_atoms))
-            new_atom  = new_atoms[i_dupe].copy()
+            new_atom  = copy.deepcopy(new_atoms[i_dupe])
 
             # Displace it by a gaussian
             for j in range(3):
@@ -141,7 +142,7 @@ class alch_structure:
                 return None
             
             # Shuffle the atoms into each others locations
-            new_atoms = self.params["atoms"].copy()
+            new_atoms = copy.deepcopy(self.params["atoms"])
             new_pos   = [a[1] for a in new_atoms]
             random.shuffle(new_pos)
             for i in range(len(new_pos)): new_atoms[i][1] = new_pos[i]
@@ -154,32 +155,98 @@ class alch_structure:
     # Return a mutation that obeys self.check_valid
     def mutate(self):
         
+        line   = " Mutating {0} ".format(self.name)
+        header = "".join(["~" for c in line])
+        log("\n"+line+"\n"+header, "alchemy.log")
+
         while True:
             prop = self.random_mutation()
             if prop is None: continue
-            if self.check_valid(prop): return prop
+            if self.check_valid(prop): 
+                log("mutated to "+prop.name, "alchemy.log")
+                return prop
+            log("rejected mutation to "+prop.name, "alchemy.log")
 
     def __str__(self):
         return self.params.__str__()
         
+def optimize(start_structure, objective, max_iter=100):
+    
+    # Initilize the structure and the
+    # value of the optimization
+    structure = start_structure
+    last_obj  = objective(structure)
 
-start_lattice = [
-    [4.0, 0, 0],
-    [0, 4.0, 0],
-    [0, 0, 4.0],
-]
+    # Initilize the path
+    path = [{
+        "structure" : structure,
+        "objective" : last_obj,
+        "proposal"  : False
+    }]
 
-start_atoms = [
-    ["Li", [0,    0,    0   ]],
-    ["Mg", [0.5,  0.5,  0.5 ]],
-    ["H" , [0.75, 0.5,  0.5 ]],
-    ["H" , [0.25, 0.5,  0.5 ]],
-    ["H" , [0.5,  0.75, 0.5 ]],
-    ["H" , [0.5,  0.25, 0.5 ]],
-    ["H" , [0.5,  0.5,  0.75]],
-    ["H" , [0.5,  0.5,  0.25]],
-]
+    # Run optimization iterations
+    for iteration in range(max_iter):
+        
+        # Generate a new structure
+        new_structure = structure.mutate()
+        new_obj       = objective(new_structure)
 
-alc = alch_structure(start_lattice, start_atoms)
-for n in range(0,100):
-    alc = alc.mutate()
+        # Add it as a "proposal" point
+        # along the path
+        path.append({
+            "structure" : new_structure,
+            "objective" : new_obj,
+            "proposal"  : True
+        })
+
+        if new_obj < last_obj:
+
+            # Accept new structure
+            structure = new_structure
+            last_obj  = new_obj
+
+        # Record accepted (or reverted)
+        # structure/objective
+        path.append({
+            "structure" : structure,
+            "objective" : last_obj,
+            "proposal"  : False
+        })
+
+    return path
+
+def test():
+
+    # Start with LiMgH6, and optimize away
+    # everything but a single hydrogen
+    start_lattice = [
+        [4.0, 0, 0],
+        [0, 4.0, 0],
+        [0, 0, 4.0],
+    ]
+
+    start_atoms = [
+        ["Li", [0,    0,    0   ]],
+        ["Mg", [0.5,  0.5,  0.5 ]],
+        ["H" , [0.75, 0.5,  0.5 ]],
+        ["H" , [0.25, 0.5,  0.5 ]],
+        ["H" , [0.5,  0.75, 0.5 ]],
+        ["H" , [0.5,  0.25, 0.5 ]],
+        ["H" , [0.5,  0.5,  0.75]],
+        ["H" , [0.5,  0.5,  0.25]],
+    ]
+
+    # Only valid if still contains hydrogens
+    def is_valid(structure):
+        return structure.params["atom_counts"]["H"] > 0
+
+    # Minimize the number of atoms
+    def objective(structure):
+        return len(structure.params["atoms"])
+
+    start = alch_structure(start_lattice, start_atoms, check_valid=is_valid)
+    path  = optimize(start, objective)
+
+    import matplotlib.pyplot as plt
+    plt.plot([p["objective"] for p in path if not p["proposal"]])
+    plt.show()
