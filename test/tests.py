@@ -1,7 +1,7 @@
 import os
-from   qet.test_systems import lah10_fm3m
-from   qet.calculations import relax, phonon_grid, dos, proj_dos
-from   qet.logs         import log
+from   qet.test.test_systems import lah10_fm3m
+from   qet.calculations      import relax, phonon_grid, dos, proj_dos
+from   qet.logs              import log
 
 def run_test_lah10_fm3m():
     
