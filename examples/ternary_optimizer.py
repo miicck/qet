@@ -1,6 +1,8 @@
 from qet.elements     import atom_substitutions, elements
 from qet.params       import parameters
 from qet.calculations import relax
+from qet.logs         import log
+import random
 import numpy as np
 
 MAX_HYDROGENS    = 32
@@ -61,6 +63,32 @@ class ternary:
         self.name = "{0}_{1}_{2}_{3}_H_{4}_shake_{5}".format(
             self.e1, self.n1, self.e2, self.n2, self.nh, self.shake_count)
 
+        log("Created "+self.name, "alchemy.log")
+
+    # Propose a substitution for atom e
+    def get_substitute(self, e):
+
+        # Get the options according to
+        # the atom_substitution matrix
+        options = dict(atom_substitutions[e])
+        if "H" in options:
+            del options["H"] # Don't sub hydrogen in
+
+        # Normalize them to a probability
+        tot = 0.0
+        for o in options: tot += options[o]
+        for o in options: options[o] /= tot
+
+        # Pick according to that probability
+        rnd = np.random.random()
+        tot = 0.0
+        for o in options:
+            tot += options[o]
+            if tot > rnd:
+                return o
+
+        raise Exception("No substitute atom found!")
+
     # Get the probabilities of various move types
     def move_probs(self):
 
@@ -92,18 +120,6 @@ class ternary:
 
         return move_type_probs
 
-    # Propose a substitution for atom e
-    def get_substitute(self, e):
-        # Get the options according to
-        # the atom_substitution matrix
-        options = dict(atom_substitutions[e])
-
-        # Normalize them to a probability
-        tot = 0.0
-        for o in options: tot += options[o]
-        for o in options: options[o] /= tot
-        return options
-
     # Suggest a perturbed ternary structure
     # including alchemical pertubations
     def propose_move(self):
@@ -119,12 +135,40 @@ class ternary:
                 move = mt
                 break
 
-        if move == "e1_replace":
+        if move == "e1_replace" or move == "e2_replace":
             
-            a_subs 
-            pass
+            # Replace a non-hydrogen atom
+            to_replace = self.e1 if move == "e1_replace" else self.e2
+            sub = self.get_substitute(to_replace)
+            log("replacing "+to_replace+" with "+sub, "alchemy.log")
 
-        return move
+            # Create the new list of atoms with to_replace replaced
+            new_atoms = list(self.params["atoms"])
+            for i, a in enumerate(new_atoms):
+                if a[0] == to_replace: new_atoms[i][0] = sub
+
+            return ternary(self.params["lattice"], new_atoms)
+
+        if move == "nh_decrease" or move == "n1_decrease" or move == "n2_decrease":
+
+            # Remove a random atom of the given type
+            if   move == "nh_decrease": to_rem = "H"
+            elif move == "n1_decrease": to_rem = self.e1
+            elif move == "n2_decrease": to_rem = self.e2
+            else: raise Exception("Unkown atom-removal move!")
+            
+            new_atoms = list(self.params["atoms"])
+            ais = [i for i, a in enumerate(new_atoms) if a[0] == to_rem]
+            irem = ais[random.randrange(0, len(ais))]
+            log("removing atom {0} {1}".format(irem+1, new_atoms[irem]), "alchemy.log")
+            del new_atoms[irem]
+
+            return ternary(self.params["lattice"], new_atoms)
+
+        if 
+
+    def __str__(self):
+        return self.params.__str__()
 
 
 start_lattice = [
@@ -145,4 +189,4 @@ start_atoms = [
 ]
 
 ter = ternary(start_lattice, start_atoms)
-print(ter.get_substitute("H"))
+print(ter.propose_move())

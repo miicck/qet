@@ -75,6 +75,24 @@ class parameters:
 
             self["species"] = spec
 
+        # Get a dictionary of the form atom name : count
+        elif key == "atom_counts":
+            atom_counts = {}
+            for a in self["atoms"]:
+                if a[0] in atom_counts: atom_counts[a[0]] += 1
+                else: atom_counts[a[0]] = 1
+            self["atom_counts"] = atom_counts
+
+        # Reurn the stochiometry 
+        # of the given cell as a string
+        elif key == "stochiometry_string":
+            atom_counts = self["atom_counts"]
+            ss = ""
+            for a in atom_counts:
+                ss += a + "_{0}_".format(atom_counts[a])
+            ss = ss[0:-1]
+            self["stochiometry_string"] = ss
+
         # Generate the qpoint grid
         elif key == "qpoint_grid":
             
@@ -123,11 +141,24 @@ class parameters:
 
         return self.par[key]
 
+    # Validate and standardise a given parameter
+    # based on it's key and value
+    def validate_standardise_param(self, key, value):
+
+        if key == "atoms":
+            # Sort atoms in decreasing atomic number
+            value.sort(key = lambda a : -elements[a[0]]["atomic number"])
+
+        return value
+
     # Set parameter values with []
     def __setitem__(self, key, value):
 
-        # Try to convert the value to the correct type
-        self.par[key] = str_to_type(value)
+        # Try to convert a string value to the correct type
+        if isinstance(value, str):
+            value = str_to_type(value)
+
+        self.par[key] = self.validate_standardise_param(key, value)
 
 
     # Convert a parameter to an input line in a QE file
