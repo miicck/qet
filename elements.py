@@ -1,3 +1,6 @@
+import os
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
 titles = [
 "atomic number", 
 "name", 
@@ -134,19 +137,39 @@ elements = {}
 for dat in data:
     d = {}
     for i in range(0, len(titles)):
-        if isinstance(dat[i], str):
-            dat[i] = dat[i].strip()
-        if titles[i] == "radioactive":
-            dat[i] = (dat[i] > 0)
+        if isinstance(dat[i], str):    dat[i] = dat[i].strip() # Strip strings in dat
+        if titles[i] == "radioactive": dat[i] = (dat[i] > 0)   # Replace radioactive with bool
         d[titles[i]] = dat[i]
     elements[dat[2]] = d
 
-# Clear scope
-titles = None
-data   = None
+# Atom-substitution counts based on the ICSD 
+# (useful for alchemical optimization)
+#
+# from 
+#      https://tddft.org/bmg/files/data/pettifor/raw_data/substitution.dat
+#
+# based on the paper
+#      https://doi.org/10.1088%2F1367-2630%2F18%2F9%2F093011
+#
+atom_substitutions = {}
+
+# Parse from substitution.dat
+with open(base_dir+"/substitution.dat") as f:
+    i = -1
+    for line in f:
+        i += 1
+        if i < 1: continue # First row/colum is padded with zeros
+        ints = [int(w) for w in line.split()]
+
+        # Get substitute atoms, sorted by frequency
+        subs = {data[j-1][2] : c for j, c in enumerate(ints) if c > 0 and j > 0}
+        subs = {k: v for k, v in sorted(subs.items(), key=lambda item: -item[1])}
+
+        atom_substitutions[data[i-1][2]] = subs
 
 def plot():
     import matplotlib.pyplot as plt
+    import numpy as np
     
     an = []
     rs = []
@@ -158,6 +181,7 @@ def plot():
 
     p1 = plt.subplot(221)
     p2 = plt.subplot(222)
+    p3 = plt.subplot(223)
 
     p1.plot(an,rs)
     p1.set_xlabel("Atomic number")
@@ -166,5 +190,12 @@ def plot():
     p2.plot(an,nc)
     p2.set_xlabel("Atomic number")
     p2.set_ylabel("Neutron count")
+
+    mat = np.zeros((len(data), len(data)))
+    for i in range(len(data)):
+        for j in range(i):
+            try: mat[i][j] = atom_substitutions[data[i][2]][data[j][2]]
+            except: pass
+    p3.imshow(mat)
 
     plt.show()

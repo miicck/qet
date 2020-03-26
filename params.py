@@ -1,10 +1,10 @@
 import os
 import numbers
-import numpy         as     np
-from   qet.constants import BOHR_TO_ANGSTROM
-from   qet.logs      import log
-from   qet.types     import str_to_type 
-from   qet.elements  import elements
+import numpy          as     np
+from   qet.constants  import BOHR_TO_ANGSTROM
+from   qet.logs       import log
+from   qet.type_tools import str_to_type 
+from   qet.elements   import elements
 
 # A parameters object contains the specification
 # for the current calculation, including both the

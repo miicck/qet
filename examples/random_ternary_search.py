@@ -3,21 +3,55 @@
 #   superconductors, performs a relaxation on each and calculates
 #   the projected density of states.
 #
-import os
+import os, math
+import numpy          as     np
 from qet.params       import parameters
 from qet.logs         import log
 from qet.elements     import elements
 from qet.calculations import relax
-from scipy.optimize   import minimize
 
 PSEUDO_DIR = "/home/mjh261/rds/rds-t2-cs084/pseudopotentials/gbrv"
 
-# Generate hydrogen cages around e1 and e2 with radii equal to the
+# Generate points on a sphere following the fibonacci method
+def fibonacci_sphere(samples):
+
+    points = []
+    offset = 2./samples
+    increment = math.pi * (3. - math.sqrt(5.));
+
+    for i in range(samples):
+        y = ((i * offset) - 1) + (offset / 2);
+        r = math.sqrt(1 - pow(y,2))
+
+        phi = (i % samples) * increment
+
+        x = math.cos(phi) * r
+        z = math.sin(phi) * r
+
+        points.append([x,y,z])
+
+    return points
+
+def get_atom_hydrogen_cluster(e, nh, centre, radius):
+    
+    # Place the atom at the centre of
+    # the cluster
+    centre = np.array(centre)
+    cluster = [[e, centre]]
+
+    # Place hydrogens in a rough sphere around the cluster
+    sphere_pts = fibonacci_sphere(nh)
+    for n in range(nh):
+        hpos = centre + radius*np.array(sphere_pts[n])
+        cluster.append(["H", hpos])
+
+    return cluster
+
+# Generate fibonacci hydrogen cages around e1 and e2 with radii equal to the
 # covalent radius of e1 and e2 respectively. The ratio of the  number 
 # of hydrogens on e1 to the number of hydrogens on e2 is equal to the
-# ratio of covalent radii squared. These cages are then optimzied w.r.t
-# a lennard-jones pair potnetial.
-def generate_preoptimized_structure(e1, e2, n1, n2, nh):
+# ratio of covalent radii squared.
+def generate_fibonacci_cage_structure(e1, e2, n1, n2, nh, volume_guess):
 
     # Create a list of the non-hydrogen elements
     es = []
@@ -46,11 +80,33 @@ def generate_preoptimized_structure(e1, e2, n1, n2, nh):
     if sum(nhs) != nh:
         raise Exception("Incorrect number of hydrogens produed!")
 
+    if n1 + n2 == 2:
+        # Place atoms at corner and BCC position
+        centres        = [[0,0,0],[0.5,0.5,0.5]]
+        cluster_radius = 0.5
+    elif n1 + n2 == 3:
+        # Place atoms along diagonal of unit cell
+        t = 1.0/3.0
+        centres        = [[0,0,0],[t,t,t],[2*t,2*t,2*t]]
+        cluster_radius = t
+    else:
+        raise Exception("Unsupported number of non-hydrogen atoms!")
+
     # Place each element in the cell, accompanied by it's
     # cluster of hydrogens
-    raise Exception("Not implemented!")
+    atoms = []
+    for i, e in enumerate(es):
+        cluster = get_atom_hydrogen_cluster(
+            e, nhs[i], centres[i], cluster_radius)
+        atoms.extend(cluster)
+    
+    # Put in a cubic cell
+    par            = parameters()
+    alat           = volume_guess ** (1.0/3.0)
+    par["atoms"]   = atoms
+    par["lattice"] = [[alat,0,0],[0,alat,0],[0,0,alat]]
 
-    print(nh, sum(nhs), cs, nhs)
+    return par
 
 # Generate a ternary structure such that each of the
 # non-hydrogen elements sees the same hydrogen environmnet
@@ -276,8 +332,6 @@ def generate_structure_platonic(e1, e2, n1, n2, nh, volume_guess):
 # with the given stochiometry
 def generate_structure(e1, e2, n1, n2, nh):
 
-    return generate_preoptimized_structure(e1, e2, n1, n2, nh)
-
     # Estimate the volume based on the covalent radius
     v1 =  elements[e1]["covalent radius"] ** 3
     v2 =  elements[e2]["covalent radius"] ** 3
@@ -286,8 +340,8 @@ def generate_structure(e1, e2, n1, n2, nh):
     volume_guess *= 4.0*3.14159/3.0 # 4/3 pi
     volume_guess *= 5.0 # This factor is from tests
 
-    return generate_structure_unbiased(e1, e2, n1, n2, nh, volume_guess)
-    #return generate_structure_platonic(e1, e2, n1, n2, nh, volume_guess)
+    #return generate_fibonacci_cage_structure(e1, e2, n1, n2, nh, volume_guess)
+    return generate_structure_platonic(e1, e2, n1, n2, nh, volume_guess)
 
 # Run a particular ternary hydride
 # with stoichiometry e1_n1 e2_n2 H_nh
@@ -338,7 +392,7 @@ allowed_ratios = [[1,1], [2,1], [1,2]]
 # The minimum and maximum allowed numbers
 # of hydrogens per non-hydrogen
 MIN_H_CONTENT = 1
-MAX_H_CONTENT = 8
+MAX_H_CONTENT = 10
 
 # Loop over pairs of elements
 for i in range(0, len(non_hydrogen_choices)):
