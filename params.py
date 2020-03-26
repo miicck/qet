@@ -57,15 +57,15 @@ class parameters:
         
         # Count the atoms
         if key == "nat" : 
-            self["nat"] = len(self["atoms"])
+            return len(self["atoms"])
 
         # Count the atom types
-        elif key == "ntyp": 
-            self["ntyp"] = len(self["species"])
+        if key == "ntyp": 
+            return len(self["species"])
 
         # Get a list of the species
         # with masses and pseudo names
-        elif key == "species":
+        if key == "species":
             spec = []
             for a in self["atoms"]: 
                 if a[0] in spec: continue
@@ -74,44 +74,44 @@ class parameters:
             for i, s in enumerate(spec):
                 spec[i] = [s, elements[s]["mass number"], s+".UPF"]
 
-            self["species"] = spec
+            return spec
 
         # Get a dictionary of the form atom name : count
-        elif key == "atom_counts":
+        if key == "atom_counts":
             atom_counts = defaultdict(lambda: 0)
             for a in self["atoms"]:
                 if a[0] in atom_counts: atom_counts[a[0]] += 1
                 else: atom_counts[a[0]] = 1
-            self["atom_counts"] = atom_counts
+            return atom_counts
 
         # Reurn the stochiometry 
         # of the given cell as a string
-        elif key == "stochiometry_string":
+        if key == "stochiometry_string":
             atom_counts = self["atom_counts"]
             ss = ""
             for a in atom_counts:
                 ss += a + "_{0}_".format(atom_counts[a])
             ss = ss[0:-1]
-            self["stochiometry_string"] = ss
+            return ss
 
         # Generate the qpoint grid
-        elif key == "qpoint_grid":
+        if key == "qpoint_grid":
             
             # Generate qpoint grid from spacing
             rlat = np.linalg.inv(self["lattice"]).T
             qps  = float(self["qpoint_spacing"])
             b2q  = lambda b : int(np.linalg.norm(b)/qps)
-            self["qpoint_grid"] = [b2q(b) for b in rlat]
+            return [b2q(b) for b in rlat]
 
         # Generate the kpoint grid
-        elif key == "kpoint_grid":
+        if key == "kpoint_grid":
 
             if "kpts_per_qpt" in self.par:
 
                 # Generate kpoint grid from qpoint grid
                 kpq = self["kpts_per_qpt"] 
                 qpg = self["qpoint_grid"]
-                self["kpoint_grid"] = [kpq * q for q in qpg]
+                return [kpq * q for q in qpg]
 
             elif "kpoint_spacing" in self.par:
 
@@ -119,17 +119,16 @@ class parameters:
                 rlat = np.linalg.inv(self["lattice"]).T
                 kps  = float(self["kpoint_spacing"])
                 b2k  = lambda b : int(np.linalg.norm(b)/kps)
-                self["kpoint_grid"] = [b2k(b) for b in rlat]
+                return [b2k(b) for b in rlat]
 
             else:
 
                 msg = "Could not generate k-point grid from parameter set."
                 raise RuntimeError(msg)
 
-        else:
-            # Could not generate, error out
-            exept = "Key \"{0}\" not found in parameters object."
-            raise ValueError(exept.format(key))
+        # Could not generate, error out
+        exept = "Key \"{0}\" cold not be generated in parameters object."
+        raise ValueError(exept.format(key))
             
 
     # Get parameter values with []
@@ -138,13 +137,13 @@ class parameters:
         # Attempt to generate the
         # parameter if key if not found
         if not key in self.par:
-            self.gen_param(key)
+            return self.gen_param(key)
 
         return self.par[key]
 
     # Validate and standardise a given parameter
     # based on it's key and value
-    def validate_standardise_param(self, key, value):
+    def validate_and_standardise_param(self, key, value):
 
         if key == "atoms":
             # Sort atoms in decreasing atomic number
@@ -159,7 +158,7 @@ class parameters:
         if isinstance(value, str):
             value = str_to_type(value)
 
-        self.par[key] = self.validate_standardise_param(key, value)
+        self.par[key] = self.validate_and_standardise_param(key, value)
 
 
     # Convert a parameter to an input line in a QE file
