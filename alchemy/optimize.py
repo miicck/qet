@@ -80,10 +80,24 @@ def eval_objective(structure, objective, structure_compare):
     os.system("mkdir "+obj_dir)
     os.chdir(obj_dir)
 
+    # Try to calculate the objective
+    # set to inf if failed
+    try:
+        # Evaluate and record the objective
+        obj = objective(structure)
+
+    except Exception as e:
+
+        # Flag failed calculation, but don't stop
+        log("    Objective evaluation failed with below error\n    {0}".format(e), "alchemy.log")
+        obj = float("inf")
+
+    # Write the results of the objective eval
     with open("objective.log","w") as f:
 
-        # Write the objective evaluation number to file
+        # Write the objective/evaluation number to file
         f.write("n {0}\n".format(objective_number))
+        f.write("objective {0}\n".format(obj))
 
         # Note the structure, in case we arrive at the
         # same structure later
@@ -91,18 +105,6 @@ def eval_objective(structure, objective, structure_compare):
             f.write("lattice {0} {1} {2}\n".format(*l))
         for a in structure["atoms"]:
             f.write("atom {0} {1} {2} {3}\n".format(a[0],*a[1]))
-
-        try:
-            # Evaluate and record the objective
-            obj = objective(structure)
-
-        except Exception as e:
-
-            # Flag failed calculation, but don't stop
-            log("    Objective evaluation failed with below error\n    {0}".format(e), "alchemy.log")
-            obj = float("inf")
-
-        f.write("objective {0}".format(obj))
 
     # Move back to previous directory
     os.chdir("..")

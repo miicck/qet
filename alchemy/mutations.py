@@ -1,6 +1,7 @@
 from   qet.alchemy.elements import propose_substitution
+from   qet.elements         import elements
 from   qet.logs             import log
-import copy, random
+import random
 
 def substitute_random_species(structure):
 
@@ -16,9 +17,13 @@ def substitute_random_species(structure):
     log(fs, "alchemy.log")
 
     # Create a new set of atoms with the replacement
-    new_structure = copy.deepcopy(structure)
+    new_structure = structure.copy()
     for i, a in enumerate(new_structure["atoms"]):
         if a[0] == to_replace: new_structure["atoms"][i][0] = sub
+
+    # Try to maintain a sensible volume
+    volume_factor = new_structure["covalent_volume"]/structure["covalent_volume"]
+    new_structure["lattice"] *= volume_factor ** (1.0/3.0)
 
     return new_structure
 
@@ -29,7 +34,7 @@ def remove_random_atom(structure):
         return None
 
     # Copy the atom list and remove a random atom from the result
-    new_structure = copy.deepcopy(structure)
+    new_structure = structure.copy()
     i_rem         = random.randrange(len(structure["atoms"]))
     atom_removed  = new_structure["atoms"][i_rem]
 
@@ -44,7 +49,7 @@ def remove_random_atom(structure):
 def duplicate_random_atom(structure):
     
     # Copy a random atom
-    new_structure = copy.deepcopy(structure)
+    new_structure = structure.copy()
     new_atoms     = new_structure["atoms"]
     i_dupe        = random.randrange(len(new_atoms))
     new_atom      = copy.deepcopy(new_atoms[i_dupe])
@@ -69,7 +74,7 @@ def shuffle_atoms(structure):
         return None
 
     # Shuffle the atoms into each others locations
-    new_structure = copy.deepcopy(structure)
+    new_structure = structure.copy()
     new_atoms     = new_structure["atoms"]
     new_pos       = [a[1] for a in new_atoms]
     random.shuffle(new_pos)

@@ -97,6 +97,15 @@ class parameters:
             ss = ss[0:-1]
             return ss
 
+        # Get an estimate for the volume of the
+        # cell by approximating each atom as 
+        # a covalent-radius sphere
+        if key == "covalent_volume":
+            vol = 0.0
+            for a in self["atoms"]:
+                vol += elements[a[0]]["covalent radius"]**3.0
+            return np.pi * vol * 4.0/3.0
+
         # Generate the qpoint grid
         if key == "qpoint_grid":
             
@@ -151,6 +160,10 @@ class parameters:
         if key == "atoms":
             # Sort atoms in decreasing atomic number
             value.sort(key = lambda a : -elements[a[0]]["atomic number"])
+
+        if key == "lattice":
+            # Lattice should be stored as a np.array
+            value = np.array(value)
 
         return value
 

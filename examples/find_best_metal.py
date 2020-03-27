@@ -17,8 +17,8 @@ start_structure["lattice"] = [
 ]
 
 # Use cheap parameters for this test
-start_structure["ecutwfc"]        = 20
-start_structure["ecutrho"]        = 200
+start_structure["ecutwfc"]        = 40
+start_structure["ecutrho"]        = 400
 start_structure["kpoint_spacing"] = 0.05
 start_structure["pseudo_dir"]     = "/home/mjh261/rds/rds-t2-cs084/pseudopotentials/gbrv"
 
@@ -48,14 +48,13 @@ def objective(structure):
     rlx        = relax(structure)
     rlx_result = rlx.run()
 
-    # Get the relaxed geometry
-    rlx_structure = structure.copy()
-    rlx_structure["atoms"]   = rlx_result["relaxed atoms"]
-    rlx_structure["lattice"] = rlx_result["relaxed lattice"]
+    # Set the geometry to the relaxed geometry
+    structure["atoms"]   = rlx_result["relaxed atoms"]
+    structure["lattice"] = rlx_result["relaxed lattice"]
 
     # Calcualte the density of states
     # of the relaxed geometry
-    ds         = dos(rlx_structure)
+    ds         = dos(structure)
     ds_result  = ds.run()
 
     return -ds_result["DOS (E_F)"]
