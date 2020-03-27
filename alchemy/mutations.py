@@ -1,7 +1,7 @@
 from   qet.alchemy.elements import propose_substitution
 from   qet.elements         import elements
 from   qet.logs             import log
-import random
+import random, copy
 
 def substitute_random_species(structure):
 

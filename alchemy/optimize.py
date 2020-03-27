@@ -13,10 +13,28 @@ def randomly_mutate(structure, mutations, check_valid):
     log(line, "alchemy.log")
     log(div, "alchemy.log")
 
+    # Mutate the structure until a valid
+    # mutation is found
     mutation = None
-    while (mutation is None) or (not check_valid(mutation)):
+    while True:
+
         mutation = mutations[random.randrange(len(mutations))](structure)
-    return mutation
+
+        # Mutations return None if there was no sensible
+        # way to apply them
+        if mutation is None:
+            log("    Mutation returned None, trying again...", "alchemy.log")
+            continue
+
+        # Check validty of the mutation
+        if not check_valid(mutation):
+            log("    Mutation invalid, trying again...", "alchemy.log")
+            continue
+
+        # Mutation valid, return it
+        return mutation
+
+    raise Exception("Failed to generate a random mutation.")
 
 # Evaluate the objective function on the given
 # structure, creating a directory for the
