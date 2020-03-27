@@ -1,5 +1,4 @@
-import os
-import numbers
+import os, numbers, copy
 import numpy          as     np
 from   qet.constants  import BOHR_TO_ANGSTROM
 from   qet.logs       import log
@@ -50,6 +49,10 @@ class parameters:
 
         if not filename is None:
             self.load_parameters(filename)
+
+    # Return a deep copy of myself
+    def copy(self):
+        return copy.deepcopy(self)
 
     # Try to generate the parameter from
     # the parameters we have
@@ -106,20 +109,20 @@ class parameters:
         # Generate the kpoint grid
         if key == "kpoint_grid":
 
-            if "kpts_per_qpt" in self.par:
-
-                # Generate kpoint grid from qpoint grid
-                kpq = self["kpts_per_qpt"] 
-                qpg = self["qpoint_grid"]
-                return [kpq * q for q in qpg]
-
-            elif "kpoint_spacing" in self.par:
+            if "kpoint_spacing" in self.par:
 
                 # Generate kpoint grid from spacing
                 rlat = np.linalg.inv(self["lattice"]).T
                 kps  = float(self["kpoint_spacing"])
                 b2k  = lambda b : int(np.linalg.norm(b)/kps)
                 return [b2k(b) for b in rlat]
+
+            elif "kpts_per_qpt" in self.par:
+
+                # Generate kpoint grid from qpoint grid
+                kpq = self["kpts_per_qpt"] 
+                qpg = self["qpoint_grid"]
+                return [kpq * q for q in qpg]
 
             else:
 

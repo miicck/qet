@@ -24,7 +24,7 @@ def randomly_mutate(structure, mutations, check_valid):
 # directories to see if this objective has 
 # already been evaluated.
 def eval_objective(structure, objective, structure_compare):
-    
+
     name    = structure["stochiometry_string"]
     version = 1
     log("Evaluating objective for {0}".format(name), "alchemy.log")
@@ -62,6 +62,7 @@ def eval_objective(structure, objective, structure_compare):
 
             # Structre is the same as previously evaluated
             log("    From equivalent structure in "+d, "alchemy.log")
+            log("    Objective = {0}".format(obj), "alchemy.log")
             return obj
     
     # Create the directory to evaluate this
@@ -80,26 +81,51 @@ def eval_objective(structure, objective, structure_compare):
         for a in structure["atoms"]:
             f.write("atom {0} {1} {2} {3}\n".format(a[0],*a[1]))
 
-        # Evaluate and record the objective
-        obj = objective(structure)
+        try:
+            # Evaluate and record the objective
+            obj = objective(structure)
+
+        except Exception as e:
+
+            # Flag failed calculation, but don't stop
+            log("    Objective evaluation failed with below error\n    {0}".format(e), "alchemy.log")
+            obj = float("inf")
+
         f.write("objective {0}".format(obj))
 
     # Move back to previous directory
     os.chdir("..")
 
+    log("    Objective = {0}".format(obj), "alchemy.log")
     return obj
 
+# Performs an alchemical optimization starting with the given structure,
+# and applying the given mutations in order to minimize the given objective. 
+# It will not consider structures for which check_valid(structure) is False
+# and will stop after max_iter mutations.
+#
+# For now, it works as follows:
+#   1. Randomly mutate structure
+#   2. Calculate the objective using the mutated structure
+#   3. Accept mutation if new objective is the lowest we've seen
+#   4. Repeat
+#
 def optimize(
     start_structure,                # Structure to begin from
-    objective,                      # Objective function to minimize
+    objective,                      # Objective function to minimize; called as objective(structure)
     mutations,                      # Allowed mutations of the structure (see alchemy.mutations)
     check_valid = lambda s : True,  # Check if a given structure is allowable
     max_iter = 100,                 # Maximum optimization steps
-
-    # Function that determines if two structures are simmilar enough
+    # Function that determines if two structures of the same stochiometry are simmilar enough
     # to not need recalculating, takes (lattice_1, atoms_1, lattice_2, atoms_2)
     structure_compare = lambda l1, a1, l2, a2 : False
     ):
+
+    # Check arguments are sensible
+    if not isinstance(start_structure, parameters):
+        raise TypeError("The input structure should be a 'parameters' object!")
+
+    optimize_start_time = datetime.now()
 
     # Create the optimization directory
     opt_dir = "alchemical_optimization"
@@ -126,7 +152,8 @@ def optimize(
     }]
 
     # Run optimization iterations
-    for iteration in range(max_iter):
+    iteration = 1
+    while True:
         
         # Generate a new structure
         new_structure = randomly_mutate(structure, mutations, check_valid)
@@ -161,6 +188,17 @@ def optimize(
             "proposal"  : False
         })
 
+        iteration += 1
+        if iteration > max_iter:
+            log("\nMax iter = {0} hit, stopping.".format(max_iter), "alchemy.log")
+            break
+
+    # Output time taken
+    optimize_end_time = datetime.now()
+    fs = "Optimization compete, total time {0}"
+    fs = fs.format(optimize_end_time - optimize_start_time)
+    log(fs, "alchemy.log")
+
     return path
 
 # Plot information about an optimization path
@@ -180,28 +218,3 @@ def plot_path(path):
     p2.set_xlabel("Iteration")
 
     plt.show()
-
-def test():
-
-    from qet.alchemy           import mutations
-    from qet.test.test_systems import lah10_fm3m
-
-    # Start with Fm3m phase of LaH10
-    start = lah10_fm3m
-
-    # Run optimizer
-    path = optimize(
-        start,                                  # Start structure
-        lambda s : len(s["atoms"]),             # Minimize number of atoms
-        [                                            
-            mutations.remove_random_atom,       # Allowed mutations
-            mutations.duplicate_random_atom,
-        ],
-        lambda s : s["atom_counts"]["H"] > 0,   # Must have at least 1 H
-
-        # We consider structures with the same atoms to be the same
-        structure_compare = lambda l1, a1, l2, a2 : True            
-
-        )
-
-    plot_path(path)

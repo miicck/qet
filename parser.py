@@ -221,6 +221,14 @@ class dos_out(output_file):
         self["DOS (energy)"] = densities
         self["fermi energy"] = fermi_energy
 
+        # Linearly interpolate to get the DOS at
+        # the fermi level
+        for i in range(len(energies)):
+            if energies[i] > fermi_energy:
+                r = (energies[i] - fermi_energy)/(energies[i] - energies[i-1])
+                self["DOS (E_F)"] = densities[i]*(1-r) + densities[i-1]*r
+                break
+
 class proj_dos_out(output_file):
     
     def parse(self, filename):

@@ -53,3 +53,27 @@ def print_test_lah10_fm3m():
     # Print ph.in file
     ph  = phonon_grid(lah10_fm3m)
     print("\n"+str(ph))
+
+def test_alchemy():
+    
+    from qet.alchemy           import mutations
+    from qet.alchemy.optimize  import optimize
+    from qet.test.test_systems import lah10_fm3m
+
+    # Start with Fm3m phase of LaH10
+    start = lah10_fm3m
+
+    # Run optimizer
+    path = optimize(
+        start,                                  # Start structure
+        lambda s : len(s["atoms"]),             # Minimize number of atoms
+        [
+            mutations.remove_random_atom,       # Allowed mutations
+            mutations.duplicate_random_atom,
+        ],
+        lambda s : s["atom_counts"]["H"] > 0,   # Must have at least 1 H
+
+        # We consider all structures with the same atoms to be the same
+        structure_compare = lambda l1, a1, l2, a2 : True
+
+        )

@@ -1,8 +1,8 @@
-from qet.alchemy.elements       import propose_substitution
-from qet.logs                   import log
+from   qet.alchemy.elements import propose_substitution
+from   qet.logs             import log
 import copy, random
 
-def substitute_random_atom_type(stucture):
+def substitute_random_species(structure):
 
     # Choose the type to be replaced
     to_replace = structure["species"]
@@ -11,7 +11,7 @@ def substitute_random_atom_type(stucture):
     # Choose the type to replace it with
     sub = propose_substitution(to_replace)
 
-    fs = "Replacing {0} in {1} with {2}"
+    fs = "Replacing {0} with {1} in {2}"
     fs = fs.format(to_replace, sub, structure["stochiometry_string"])
     log(fs, "alchemy.log")
 

@@ -1,5 +1,5 @@
-import os
-from qet.elements import data
+import os, random
+from   qet.elements import data
 
 # Atom-substitution counts based on the ICSD
 # (useful for alchemical optimization)

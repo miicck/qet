@@ -1,5 +1,18 @@
-from   qet.parser        import proj_dos_out
+from   qet.parser        import proj_dos_out, dos_out
 import matplotlib.pyplot as     plt
+
+# Plot the density of states calculated
+# with output file given by filename
+def plot_dos(filename="./dos.out"):
+    
+    # Parse the DOS
+    out = dos_out(filename)
+
+    plt.plot(out["DOS energies"], out["DOS (energy)"], color="blue", label="DOS ($E$)")
+    plt.axvline(out["fermi energy"], color="red", label="Fermi energy")
+    plt.axhline(out["DOS (E_F)"], color="green", label="DOS ($E_f$)")
+    plt.legend()
+    plt.show()
 
 # Plot the projected density of states calculated
 # with output file given by filename

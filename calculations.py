@@ -145,10 +145,13 @@ class calculation:
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
 
-            cmd = "cd {0}; mpirun -np {1} {2} -i {3} > {4}"
+            # Use k-point parallelism
+            qe_flags = "-nk {0}".format(self.in_params["cores_per_node"])
+
+            cmd = "cd {0}; mpirun -np {1} {2} {3} -i {4} > {5}"
             cmd = cmd.format(
                 path, self.in_params["cores_per_node"], 
-                self.exe(), inf, outf)
+                self.exe(), qe_flags, inf, outf)
 
             log("Running:\n"+cmd)
             try:
