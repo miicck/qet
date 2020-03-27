@@ -1,4 +1,4 @@
-from qet.alchemy.optimize  import optimize, plot_path
+from qet.alchemy.optimize  import optimize
 from qet.alchemy           import mutations
 from qet.params            import parameters
 from qet.calculations      import relax, dos

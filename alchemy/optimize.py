@@ -64,7 +64,15 @@ def eval_objective(structure, objective, structure_compare):
             log("    From equivalent structure in "+d, "alchemy.log")
             log("    Objective = {0}".format(obj), "alchemy.log")
             return obj
-    
+           
+    # Count previous objective evaluations
+    # so we know which evaluation this is
+    objective_number = 1
+    for d in os.listdir("."):
+        if not os.path.isdir(d): continue
+        if not os.path.isfile(d+"/objective.log"): continue
+        objective_number += 1
+
     # Create the directory to evaluate this
     # objective in
     obj_dir = "{0}_v{1}".format(name, version)
@@ -73,6 +81,9 @@ def eval_objective(structure, objective, structure_compare):
     os.chdir(obj_dir)
 
     with open("objective.log","w") as f:
+
+        # Write the objective evaluation number to file
+        f.write("n {0}\n".format(objective_number))
 
         # Note the structure, in case we arrive at the
         # same structure later
@@ -201,20 +212,71 @@ def optimize(
 
     return path
 
-# Plot information about an optimization path
-def plot_path(path):
+# Plot information about an optimization
+def plot():
     import matplotlib.pyplot as plt
+
+    # Parse objective.log files
+    data = []
+
+    # Loop over objective.log files
+    for d in os.listdir("."):
+        if not os.path.isdir(d): continue
+        if not os.path.isfile(d+"/objective.log"): continue
+
+        with open(d+"/objective.log") as f:
+            for line in f:
+                splt = line.split()
+
+                # Parse structure number
+                if splt[0] == "n":
+                    n = int(splt[1])
+                    continue
+                
+                # Parse objective function
+                if splt[0] == "objective":
+                    obj = float(splt[1])
+                    continue
+
+        # Get the Latex structure name from
+        # the directory name
+        name = ""
+        splt = d.split("_")
+        for i in range(0, len(splt)-1, 2):
+            name += splt[i]
+            if int(splt[i+1]) > 1:
+                name += "$_{0}$".format("{"+splt[i+1]+"}")
+
+        # Ignore structures that could not be calculated
+        if obj == float("inf"):
+            continue
+
+        data.append([n, obj, name])
+
+    # Sort data by number and unzip into columns
+    data.sort(key=lambda d:d[0])
+    data = list(zip(*data))
     
-    # Plot objective function evolution
     p1 = plt.subplot(221)
-    p2 = plt.subplot(222)
 
-    p1.plot([p["objective"] for p in path if not p["proposal"]])
-    p1.set_ylabel("Objective function (best)")
-    p1.set_xlabel("Iteration")
+    # Create some extra space at the
+    # top of the plot
+    max_y   = max(data[1])
+    min_y   = min(data[1])
+    dm      = (max_y-min_y)/4.0
+    max_y  += 2*dm
+    p1.set_ylim([min_y, max_y])
 
-    p2.plot([p["objective"] for p in path])
-    p2.set_ylabel("Objective function (current)")
-    p2.set_xlabel("Iteration")
+    # Plot the objective function
+    p1.plot(data[0], data[1], marker="+")
+
+    # Label the structures
+    ap = { "arrowstyle" : "->" }
+    for i, (x,y) in enumerate(zip(data[0], data[1])):
+        p1.annotate(data[2][i], (x,y), xytext=(x,y+dm), arrowprops=ap, rotation=90)
+
+    # Title the axes
+    p1.set_ylabel("Objective function")
+    p1.set_xlabel("Structure number")
 
     plt.show()
