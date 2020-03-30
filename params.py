@@ -1,7 +1,6 @@
 import os, numbers, copy
 import numpy          as     np
 from   qet.constants  import BOHR_TO_ANGSTROM
-from   qet.logs       import log
 from   qet.type_tools import str_to_type 
 from   qet.elements   import elements
 from   collections    import defaultdict
@@ -48,7 +47,7 @@ class parameters:
             self["pseudo_dir"] = os.environ["HOME"]+"/pseudopotentials"
 
         if not filename is None:
-            self.load_parameters(filename)
+            self.load(filename)
 
     # Return a deep copy of myself
     def copy(self):
@@ -89,7 +88,7 @@ class parameters:
 
         # Reurn the stochiometry 
         # of the given cell as a string
-        if key == "stochiometry_string":
+        if key == "stoichiometry_string":
             atom_counts = self["atom_counts"]
             ss = ""
             for a in atom_counts:
@@ -311,17 +310,40 @@ class parameters:
 
         return i_dealt_with
 
-    def load_parameters(self, filename):
+    # Save parameter set to file
+    def save(self, filename):
+
+        with open(filename, "w") as f:
+
+            # Write lattice
+            lattice = self["lattice"]
+            f.write("lattice angstrom\n")
+            f.write("{0} {1} {2}\n".format(*lattice[0]))
+            f.write("{0} {1} {2}\n".format(*lattice[1]))
+            f.write("{0} {1} {2}\n".format(*lattice[2]))
+            f.write("\n")
+
+            # Write atoms
+            f.write("atoms fractional\n")
+            for a in self["atoms"]:
+                f.write("{0} {1} {2} {3}\n".format(a[0], *a[1]))
+            f.write("\n")
+
+            # Write other parameters
+            for p in self.par:
+                if p == "atoms":   continue
+                if p == "lattice": continue
+
+                f.write("{0} {1}\n".format(p, self.par[p]))
+
+    # Load parameter set from file
+    def load(self, filename):
 
         # Read the file into lines
         with open(filename) as f:
             lines = f.read().split("\n")
 
-        # Parse the file, line by line
-        log("Reading parameters from {0}:".format(filename))
-
-        # Loop over lines, use a while loop so
-        # i can be incremented by the parsing logic
+        # Tidy lines
         for i in range(0, len(lines)):
         
             # Clean the line, remove comments/whitespace
@@ -338,7 +360,7 @@ class parameters:
         i_dealt_with.extend(self.parse_lattice(lines))
         i_dealt_with.extend(self.parse_atoms(lines))
 
-        # Assume the rest is simple key : value form
+        # Assume the rest is simple key value form
         for i in range(0, len(lines)):
 
             # Skip lines already dealt with
@@ -353,5 +375,3 @@ class parameters:
                 raise ValueError(exept.format(lines[i]))
 
             self[spl[0]] = spl[1]
-
-        log(self)
