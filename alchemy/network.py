@@ -1,8 +1,12 @@
-from qet.params import parameters
-from qet.logs   import log
+from   qet.params import parameters
+from   qet.logs   import log
+from   time       import sleep
+from   filelock   import FileLock, Timeout
+import numpy      as     np
 import os, random
 
-# A vertex of an alch_network
+# A vertex of an alch_network, designed to deal with multiple processes
+# trying to access / modify the vertex
 class alch_vertex:
 
     # Load a vertex from a directory
@@ -14,6 +18,15 @@ class alch_vertex:
         # Record my vertex directory
         vertex_dir = os.path.abspath(vertex_dir)
         self.dir   = vertex_dir
+        self.name  = self.dir.split("/")[-1]
+        self.locks = {}
+
+    # Get a lock by name (creates it if it doesn't exist)
+    def lock(self, name):
+        if name in self.locks: return self.locks[name]
+        lock = FileLock(self.dir+"/"+name)
+        self.locks[name] = lock
+        return lock
 
     # Convert to vertex
     def __str__(self):
@@ -21,14 +34,15 @@ class alch_vertex:
 
     # Get the evaluated objectives in dictionary form
     def get_evaluated_objectives(self):
-        
-        ret = {}
-        if os.path.isfile(self.dir+"/objectives"):
-            with open(self.dir+"/objectives") as f:
-                for line in f:
-                    splt = line.split(":")
-                    ret[splt[0]] = float(splt[1])
-        return ret
+
+        with self.lock("obj_file_lock"):
+            ret = {}
+            if os.path.isfile(self.dir+"/objectives"):
+                with open(self.dir+"/objectives") as f:
+                    for line in f:
+                        splt = line.split(":")
+                        ret[splt[0]] = float(splt[1])
+            return ret
 
     # Evaluate the given objective function
     # on the parameter set for this vertex
@@ -37,45 +51,93 @@ class alch_vertex:
         # Return stored objective value
         stored = self.get_evaluated_objectives()
         if objective_name in stored: 
-            fs = "using previously evaluated objective {0} = {1} in {2}"
-            log(fs.format(objective_name, stored[objective_name], self.dir), "alchemy.log")
             return stored[objective_name]
 
-        # Set the working directory to the vertex directory
-        old_wd = os.getcwd()
-        os.chdir(self.dir)
-
+        # Attempt to evaluate the objective. 
+        #
+        # If evaluataion fails (i.e the underlying objective_function
+        # could not be evaluated), the objective is set to inf.
+        #
+        # If evaluation is already underway on another process (i.e we cannot 
+        # acquire objective_lock within some timeout), return inf this time,
+        # but do not store inf for future retrieval.
+        #
         try:
-            # Attempt to evaluate the objective
-            obj = objective_function(self.params)
-            fs = "evaluated objective {0} = {1} in {2}"
-            log(fs.format(objective_name, obj, self.dir), "alchemy.log")
-        except:
-            # Failed to evaluate the objective, set it to inf
-            fs = "failed to evaluate the objective {0} in {1}"
-            log(fs.format(objective_name, self.dir), "alchemy.log")
-            obj = float("inf")
+            with self.lock("objective_lock").acquire(timeout=1.0):
 
-        # Write the values of all the objectives to file
-        stored[objective_name] = obj
-        with open("objectives", "w") as f:
-            for o in stored:
-                f.write("{0}:{1}\n".format(o, stored[o]))
+                # Set the working directory to the vertex directory
+                old_wd = os.getcwd()
+                os.chdir(self.dir)
 
-        # Restore working directory
-        os.chdir(old_wd)
+                try:
+                    # Attempt to evaluate the objective
+                    obj = objective_function(self.params)
+                    fs = "evaluated objective in {2}\n    {0} = {1}"
+                    log(fs.format(objective_name, obj, self.name), "alchemy.log")
+
+                except:
+                    # Failed to evaluate the objective, set it to inf
+                    fs = "failed to evaluate the objective\n    {0} in {1}"
+                    log(fs.format(objective_name, self.name), "alchemy.log")
+                    obj = float("inf")
+
+                # Write the values of all the objectives to file
+                with self.lock("obj_file_lock"):
+                    stored = self.get_evaluated_objectives()
+                    stored[objective_name] = obj
+                    with open("objectives", "w") as f:
+                        for o in stored:
+                            f.write("{0}:{1}\n".format(o, stored[o]))
+
+                # Restore working directory
+                os.chdir(old_wd)
+                return obj
+
+        except Timeout:
+            fs = "Evaluation already underway in {0}".format(self.name)
+            log(fs, "alchemy.log")
+            return float("inf")
         
-    # Return my parameters, as recorded in the
-    # /parameters file
+    # Return my parameters, as recorded in the /parameters file
     @property
     def params(self):
-        filename = self.dir + "/parameters"
-        if not os.path.isfile(filename):
-            raise Exception("Parameters for vertex {0} not found!".format(self.dir))
-        return parameters(filename=filename)
+        with self.lock("parameters_lock"):
+            filename = self.dir + "/parameters"
+            if not os.path.isfile(filename):
+                raise Exception("Parameters for vertex {0} not found!".format(self.dir))
+            return parameters(filename=filename)
 
+    # Set my parameters (by saving them in the /parameters file)
+    @params.setter
+    def params(self, params):
+        with self.lock("parameters_lock"):
+            filename = self.dir + "/parameters"
+            params.save(filename)
 
-# An alch_network is a graph, where each vertex corresponds
+    # The verticies that were mutated to
+    # obtain this vertex
+    @property
+    def parents(self):
+        with self.lock("parents_lock"):
+            par = []
+            if not os.path.isfile(self.dir + "/parents"): return par
+            with open(self.dir + "/parents") as f:
+                for line in f:
+                    line = line.strip()
+                    if len(line) == 0: continue
+                    par.append(line)
+            return par
+
+    # Add a parent vertex
+    def add_parent(self, parent):
+        with self.lock("parents_lock"):
+            pts = self.parents
+            pts.append(parent.dir)
+            with open(self.dir + "/parents", "w") as f:
+                for p in pts:
+                    f.write(p+"\n")
+
+# An alch_network is a graph of alch_vertexs, where each vertex corresponds
 # to a particular parameter set.
 class alch_network:
 
@@ -104,18 +166,25 @@ class alch_network:
                 i += 1
 
         # Ensure the network directory exists
+        created = False
         if not os.path.isdir(base_dir):
             os.system("mkdir "+base_dir)
-            log("Created network in "+base_dir, "alchemy.log")
-        else:
-            log("Loaded network from "+base_dir,"alchemy.log")
+            created = True
 
         # Use the absolute path from here on
         base_dir  = os.path.abspath(base_dir)
         self.dir  = base_dir
+        self.name = base_dir.split("/")[-1]
 
         # Record the parameters comparison function
         self.parameters_comp = parameters_comp
+
+        if created: log("Created network "+self.dir, "alchemy.log")
+        else: 
+            fs = "Loaded network {0} with {1} verticies"
+            fs = fs.format(self.dir, len(self.verticies))
+            log(fs, "alchemy.log")
+
 
     # My verticies
     @property
@@ -128,6 +197,7 @@ class alch_network:
         
         # Loop over subdirectories
         for d in os.listdir(self.dir):
+            d = self.dir + "/" + d
             if not os.path.isdir(d): continue
 
             # Load this vertex
@@ -169,13 +239,16 @@ class alch_network:
             # already exists
             vertex = alch_vertex(vertex_dir)
             if self.parameters_comp(params, vertex.params):
+                log("Vertex {0} already exists".format(vertex.name), "alchemy.log")
                 return vertex
 
         # Initialize the vertex directory
         os.system("mkdir "+vertex_dir)
-        params.save(vertex_dir+"/parameters")
                 
-        return alch_vertex(vertex_dir)
+        new_vertex        = alch_vertex(vertex_dir)
+        new_vertex.params = params
+        log("Created vertex {0}".format(new_vertex.name), "alchemy.log")
+        return new_vertex
 
     # Expand upon a given vertex by applying
     # the given parameter mutation. Returns 
@@ -185,23 +258,74 @@ class alch_network:
         if not os.path.isdir(vertex.dir):
             raise Exception("Tried to expand a vertex that wasn't in the network!")
 
+        # Nice formatting
+        expand_text = "{:^64}".format("Expanding vertex "+vertex.name)
+        underline   = "".join("-" for c in expand_text)
+        log("\n"+expand_text, "alchemy.log")
+        log(underline, "alchemy.log")
+
         # Apply mutation, return None on failure
         mutation = param_mutation(vertex.params)
-        if mutation is None: return None
+        if mutation is None: 
+            log("Mutation {0} returned None".format(param_mutation.__name__), "alchemy.log")
+            log(underline, "alchemy.log")
+            return None
 
-        # Create new vertex, return None on failure
+        # Create new vertex
         new_vertex = self.create_vertex(mutation)
-        if new_vertex is None: return None
-
-        # Add the new vertex to the network and return it
+        new_vertex.add_parent(vertex)
+        log(underline, "alchemy.log")
         return new_vertex
+
+    # Choose a random vertex according to weights generated
+    # by the given weight function
+    def random_weighted_vertex(self, weight=lambda v : 1.0):  
+
+        verts = self.verticies
+        if len(verts) == 0: return None
+        weights = [weight(v) for v in verts]
+        return random.choices(verts, weights=weights)[0]
+
+    # By default choose vertex by exp(-objective) weighting
+    def default_vertex_chooser(self, objective_name, objective_function):
+        
+        wf = lambda v : np.exp(-v.objective(objective_name, objective_function))
+        return self.random_weighted_vertex(weight = wf)
+
+    # Expand the network with an aim to minimize the given objective
+    # will choose a vertex with low objective value and expand it using
+    # one of the given mutations
+    def expand_to_minimize(self,
+        objective_name,     # Name of objective to minimize
+        objective_function, # Objective to minimize
+        mutations,          # List of allowed mutations to vertex parameters
+        # The function to choose a vertex to expand from a network
+        vertex_chooser = lambda n, on, of : n.default_vertex_chooser(on, of)
+        ):
+
+        if len(mutations) == 0:
+            raise Exception("No mutations specified in expand_to_minimize")
+
+        # For now, choose a random mutation
+        mut  = mutations[random.randrange(len(mutations))]
+
+        log("Choosing vertex to expand (minimizing {0})...".format(objective_name), "alchemy.log")
+        vert = vertex_chooser(self, objective_name, objective_function)
+        log("Vertex chosen: "+vert.name, "alchemy.log")
+        self.expand_vertex(vert, mut)
 
 def test():
     from qet.test.test_systems import lah10_fm3m
     from qet.alchemy           import mutations
+
     nw = alch_network("test_network")
     v = nw.create_vertex(lah10_fm3m)
 
+    obj_name = "atom count"
+    obj_func = lambda s : len(s["atoms"])
+    muts     = [mutations.substitute_random_species,
+                mutations.remove_random_atom,
+                mutations.duplicate_random_atom]
+
     for n in range(100):
-        v = nw.expand_vertex(v, mutations.substitute_random_species)
-        v.objective("atom count", lambda s : len(s["atoms"]))
+        nw.expand_to_minimize(obj_name, obj_func, muts)
