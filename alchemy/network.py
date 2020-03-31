@@ -75,10 +75,11 @@ class alch_vertex:
                     fs = "evaluated objective in {2}\n    {0} = {1}"
                     log(fs.format(objective_name, obj, self.name), "alchemy.log")
 
-                except:
+                except Exception as e:
                     # Failed to evaluate the objective, set it to inf
                     fs = "failed to evaluate the objective\n    {0} in {1}"
                     log(fs.format(objective_name, self.name), "alchemy.log")
+                    log("error: {0}".format(e), "alchemy.log")
                     obj = float("inf")
 
                 # Write the values of all the objectives to file
@@ -314,12 +315,17 @@ class alch_network:
         log("Vertex chosen: "+vert.name, "alchemy.log")
         self.expand_vertex(vert, mut)
 
-def test():
+
+##########################
+# TESTS FOR ALCH_NETWORK #
+##########################
+
+def min_atoms_test():
     from qet.test.test_systems import lah10_fm3m
     from qet.alchemy           import mutations
 
     nw = alch_network("test_network")
-    v = nw.create_vertex(lah10_fm3m)
+    v  = nw.create_vertex(lah10_fm3m)
 
     obj_name = "atom count"
     obj_func = lambda s : len(s["atoms"])
@@ -329,3 +335,35 @@ def test():
 
     for n in range(100):
         nw.expand_to_minimize(obj_name, obj_func, muts)
+
+def get_minus_dos_ef(structure):
+    from qet.calculations import relax, dos
+
+    # Relax the structure 
+    rlx = relax(structure)
+    res = rlx.run()
+
+    # Calculate DOS of the relaxed structure
+    structure["atoms"]   = res["relaxed atoms"]
+    structure["lattice"] = res["relaxed lattice"]
+    dos_calc = dos(structure)
+    res      = dos_calc.run()
+
+    # Maximize DOS => minimize -DOS
+    return -res["DOS (E_F)"]
+
+def metal_test():
+    from qet.test.test_systems import bcc_lithium
+    from qet.alchemy           import mutations
+
+    #bcc_lithium["cores_per_node"] = 1
+    bcc_lithium["pseudo_dir"]     = "/home/mjh261/rds/rds-t2-cs084/pseudopotentials/gbrv"
+    nw = alch_network("metals_network")
+    v  = nw.create_vertex(bcc_lithium)
+
+    muts = [mutations.substitute_random_species,
+            mutations.remove_random_atom,
+            mutations.duplicate_random_atom]
+
+    for n in range(100):
+        nw.expand_to_minimize("-DOS (E_F)", get_minus_dos_ef, muts)

@@ -160,7 +160,7 @@ class parameters:
             # Sort atoms in decreasing atomic number
             value.sort(key = lambda a : -elements[a[0]]["atomic number"])
 
-        if key == "lattice":
+        elif key == "lattice":
             # Lattice should be stored as a np.array
             value = np.array(value)
 
