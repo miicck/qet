@@ -71,7 +71,27 @@ class alch_vertex:
 
                 try:
                     # Attempt to evaluate the objective
+                    log("Evaluating objective in {0}".format(self.name), "alchemy.log")
                     obj = objective_function(self.params)
+
+                    # If the objective has length 2, we assume it has the form
+                    # [objective value, new structure]. If it has length 1 assume 
+                    # it is of the form [objective value], but issue a warning,
+                    # as the function should probably have not returned a list if
+                    # there was only one thing to return. All other lengths are errors.
+                    if hasattr(obj, "__len__"):
+                        if   len(obj) >  2: raise Exception("Objective returned too many results!")
+                        elif len(obj) == 0: raise Exception("Objective returned too few results!")
+                        elif len(obj) == 1:
+                            fs = "objective assumed to be of the form [objective value] in {0}"
+                            log(fs.format(self.name), "alchemy.warnings")
+                            obj = obj[0]
+                        else:
+                            fs = "Objective returned [objective value, new structure] in {0}"
+                            log(fs.format(self.name), "alchemy.log")
+                            self.params = obj[1]
+                            obj = obj[0]
+
                     fs = "evaluated objective in {2}\n    {0} = {1}"
                     log(fs.format(objective_name, obj, self.name), "alchemy.log")
 
@@ -126,6 +146,7 @@ class alch_vertex:
                 for line in f:
                     line = line.strip()
                     if len(line) == 0: continue
+                    if line in par: continue
                     par.append(line)
             return par
 
@@ -133,6 +154,7 @@ class alch_vertex:
     def add_parent(self, parent):
         with self.lock("parents_lock"):
             pts = self.parents
+            if parent.dir in pts: return
             pts.append(parent.dir)
             with open(self.dir + "/parents", "w") as f:
                 for p in pts:
@@ -254,7 +276,7 @@ class alch_network:
     # Expand upon a given vertex by applying
     # the given parameter mutation. Returns 
     # the new vertex if successful, otherwise None
-    def expand_vertex(self, vertex, param_mutation):
+    def expand_vertex(self, vertex, param_mutation, is_valid):
 
         if not os.path.isdir(vertex.dir):
             raise Exception("Tried to expand a vertex that wasn't in the network!")
@@ -271,6 +293,19 @@ class alch_network:
             log("Mutation {0} returned None".format(param_mutation.__name__), "alchemy.log")
             log(underline, "alchemy.log")
             return None
+
+        # Check structure produced is valid
+        if not is_valid(mutation):
+            log("Mutation {0} produced invalid structure".format(param_mutation.__name__, "alchemy.log"))
+            log(underline, "alchemy.log")
+            return None
+
+        # Adjust the volume of the new structure in an
+        # attempt to accomodate the mutation
+        cov_volume_factor = mutation["covalent_volume"]/vertex.params["covalent_volume"]
+        lat_volume_factor = np.linalg.det(mutation["lattice"])/np.linalg.det(vertex.params["lattice"])
+        volume_boost = cov_volume_factor / lat_volume_factor
+        mutation["lattice"] *= volume_boost ** (1.0/3.0)
 
         # Create new vertex
         new_vertex = self.create_vertex(mutation)
@@ -300,6 +335,8 @@ class alch_network:
         objective_name,     # Name of objective to minimize
         objective_function, # Objective to minimize
         mutations,          # List of allowed mutations to vertex parameters
+        # Function used to determine if a mutated structure is valid
+        is_valid = lambda s : True,
         # The function to choose a vertex to expand from a network
         vertex_chooser = lambda n, on, of : n.default_vertex_chooser(on, of)
         ):
@@ -308,13 +345,30 @@ class alch_network:
             raise Exception("No mutations specified in expand_to_minimize")
 
         # For now, choose a random mutation
-        mut  = mutations[random.randrange(len(mutations))]
+        mut = mutations[random.randrange(len(mutations))]
 
         log("Choosing vertex to expand (minimizing {0})...".format(objective_name), "alchemy.log")
         vert = vertex_chooser(self, objective_name, objective_function)
         log("Vertex chosen: "+vert.name, "alchemy.log")
-        self.expand_vertex(vert, mut)
+        self.expand_vertex(vert, mut, is_valid)
 
+    # Plot this network
+    def plot(self):
+        import matplotlib.pyplot as plt
+        import networkx as nx
+        g = nx.DiGraph()
+        verts = self.verticies
+        names = [v.name for v in verts]
+        for v in verts:
+            for p in v.parents:
+                pname = p.split("/")[-1]
+                g.add_edge(pname, v.name)
+        g.add_nodes_from(names)
+        nx.draw(g, labels={n : n for n in names}, arrows=True)
+        plt.show()
+
+def plot_alch_network(directory="./"):
+    alch_network(directory).plot()
 
 ##########################
 # TESTS FOR ALCH_NETWORK #
@@ -350,7 +404,9 @@ def get_minus_dos_ef(structure):
     res      = dos_calc.run()
 
     # Maximize DOS => minimize -DOS
-    return -res["DOS (E_F)"]
+    # we also return the relaxed parameters, which will
+    # replace the parameters for this vertex
+    return [-res["DOS (E_F)"], structure]
 
 def metal_test():
     from qet.test.test_systems import bcc_lithium
