@@ -40,7 +40,7 @@ def minus_h_dos(structure):
 
     # Loop over atoms and atomic wavefunctions
     for atom_number in res["PDOS (fermi energy)"]:
-        for wfc_number in res["PDOS (fermi energy)"]:
+        for wfc_number in res["PDOS (fermi energy)"][atom_number]:
 
             # Get the type of atom and the contribution to the DOS at E_F
             atom_name = res["PDOS atom names"][atom_number][wfc_number]

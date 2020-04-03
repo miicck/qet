@@ -1,9 +1,9 @@
 from   qet.params import parameters
-from   qet.logs   import log
+from   qet.logs   import log, logging_enabled
 from   time       import sleep
 from   filelock   import FileLock, Timeout
 import numpy      as     np
-import os, random
+import os, random, math
 
 # A vertex of an alch_network, designed to deal with multiple processes
 # trying to access / modify the vertex
@@ -160,6 +160,21 @@ class alch_vertex:
                 for p in pts:
                     f.write(p+"\n")
 
+    # Get my name, in latex format
+    @property
+    def latex_name(self):
+        splt    = self.name.split("_")
+        version = splt[-1]
+        splt    = splt[0:-1]
+        ltx     = ""
+        for i in range(0, len(splt), 2):
+            if int(splt[i+1]) > 1:
+                ltx += "{0}$_{1}$".format(splt[i], "{"+splt[i+1]+"}")
+            else:
+                ltx += splt[i]
+        return ltx + " ({0})".format(version)
+            
+
 # An alch_network is a graph of alch_vertexs, where each vertex corresponds
 # to a particular parameter set.
 class alch_network:
@@ -296,7 +311,7 @@ class alch_network:
 
         # Check structure produced is valid
         if not is_valid(mutation):
-            log("Mutation {0} produced invalid structure".format(param_mutation.__name__, "alchemy.log"))
+            log("Mutation {0} produced invalid structure".format(param_mutation.__name__), "alchemy.log")
             log(underline, "alchemy.log")
             return None
 
@@ -353,22 +368,90 @@ class alch_network:
         self.expand_vertex(vert, mut, is_valid)
 
     # Plot this network
-    def plot(self):
-        import matplotlib.pyplot as plt
-        import networkx as nx
-        g = nx.DiGraph()
+    def plot(self, objective=None):
+        import matplotlib.pyplot  as plt
+        import matplotlib.patches as patches
+        import networkx           as nx
+            
+        # Get the verticies
         verts = self.verticies
-        names = [v.name for v in verts]
+        names = [v.latex_name for v in verts]
+        objs  = [v.get_evaluated_objectives() for v in verts]
+
+        # If objective=None, color according to first objective found
+        if objective is None:
+            for o in objs:
+                if not objective is None:
+                    break
+                for k in o:
+                    objective = k
+                    break
+
+        # Obtain colors from objective function values
+        # green = lowest value of objective
+        # blue  = highest value of objective
+        # red   = infinite/not calculated objective
+        vals = []
+        for o in objs:
+            if objective in o: vals.append(o[objective])
+            else: vals.append(float("inf"))
+        max_v = max(v for v in vals if math.isfinite(v))
+        min_v = min(v for v in vals if math.isfinite(v))
+        vals = [(v-min_v)/(max_v-min_v) for v in vals]
+        colors = [[0, 1.0-v, v, 0.4] if math.isfinite(v) else [1.0,0,0,0.4] for v in vals]
+
+        # Construct the graph
+        g = nx.DiGraph()
         for v in verts:
             for p in v.parents:
-                pname = p.split("/")[-1]
-                g.add_edge(pname, v.name)
+                pname = alch_vertex(p).latex_name
+                g.add_edge(pname, v.latex_name)
         g.add_nodes_from(names)
-        nx.draw(g, labels={n : n for n in names}, arrows=True)
+
+        # Get the node positions
+        pos = nx.drawing.nx_agraph.graphviz_layout(g)
+
+        # Setup the plot area
+        max_x = max(pos[n][0] for n in names)
+        min_x = min(pos[n][0] for n in names)
+        max_y = max(pos[n][1] for n in names)
+        min_y = min(pos[n][1] for n in names)
+        plt.xlim(min_x, max_x)
+        plt.ylim(min_y, max_y)
+        plt.axis("off")
+
+        # Draw nodes
+        for n,c in zip(names,colors):
+            args = dict(
+                verticalalignment="center", 
+                horizontalalignment="center",
+            )
+            plt.annotate(n, pos[n], bbox=dict(facecolor="white"), **args)
+            plt.annotate(n, pos[n], bbox=dict(facecolor=c), **args)
+
+        # Get the edges
+        edges = [[pos[e[0]], pos[e[1]]] for e in g.edges()]
+
+        # Draw edges
+        for (xy1, xy2) in edges:
+            dxy = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
+            centre = [(xy1[0]+xy2[0])/2.0, (xy1[1]+xy2[1])/2.0]
+            plt.arrow(xy1[0], xy1[1], dxy[0], dxy[1], head_width=0)
+
+        # Draw arrows
+        for (xy1, xy2) in edges:
+            dxy = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
+            centre = [(xy1[0]+xy2[0])/2.0, (xy1[1]+xy2[1])/2.0]
+            plt.arrow(centre[0]-dxy[0]/128, centre[1]-dxy[1]/128, dxy[0]/128, dxy[1]/128,
+                      head_width=10, fc="black", ec=None)
+
+
         plt.show()
 
 def plot_alch_network(directory="./"):
+    logging_enabled(False)
     alch_network(directory).plot()
+    logging_enabled(True)
 
 ##########################
 # TESTS FOR ALCH_NETWORK #

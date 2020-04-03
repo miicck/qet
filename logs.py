@@ -1,13 +1,19 @@
 from   filelock     import FileLock
 import os, datetime
 
+logging_enabled=True
+def logging_enabled(value):
+    global logging_enabled
+    logging_enabled = value
+
 # Log a message in a logfile with the given name
 # these logfiles are at a persistant location and
 # are created in whatever the working directory 
 # was when the file was first logged to.
 open_logfiles = {}
 def log(message, filename="qet.out"):
-    global open_logfiles
+    global open_logfiles, logging_enabled
+    if not logging_enabled: return
 
     if not filename in open_logfiles:
 
