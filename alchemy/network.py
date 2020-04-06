@@ -13,7 +13,8 @@ class alch_vertex:
     def __init__(self, vertex_dir):
 
         if not os.path.isdir(vertex_dir):
-            raise Exception("Tried to load a vertex from a non-existant directory!")
+            fs = "Tried to load a vertex from the non-existant directory: {0}"
+            raise Exception(fs.format(vertex_dir))
 
         # Record my vertex directory
         vertex_dir = os.path.abspath(vertex_dir)
@@ -154,8 +155,10 @@ class alch_vertex:
     def add_parent(self, parent):
         with self.lock("parents_lock"):
             pts = self.parents
-            if parent.dir in pts: return
-            pts.append(parent.dir)
+            pdir = parent.dir
+            pdir = pdir.split("/")[-1]
+            if pdir in pts: return
+            pts.append(pdir)
             with open(self.dir + "/parents", "w") as f:
                 for p in pts:
                     f.write(p+"\n")
@@ -210,6 +213,7 @@ class alch_network:
             created = True
 
         # Use the absolute path from here on
+        print(base_dir)
         base_dir  = os.path.abspath(base_dir)
         self.dir  = base_dir
         self.name = base_dir.split("/")[-1]
@@ -369,9 +373,8 @@ class alch_network:
 
     # Plot this network
     def plot(self, objective=None):
-        import matplotlib.pyplot  as plt
-        import matplotlib.patches as patches
-        import networkx           as nx
+        import matplotlib.pyplot as plt
+        import networkx          as nx
             
         # Get the verticies
         verts = self.verticies
@@ -391,6 +394,7 @@ class alch_network:
         # green = lowest value of objective
         # blue  = highest value of objective
         # red   = infinite/not calculated objective
+        # white = underway
         vals = []
         for o in objs:
             if objective in o: vals.append(o[objective])
@@ -399,12 +403,15 @@ class alch_network:
         min_v = min(v for v in vals if math.isfinite(v))
         vals = [(v-min_v)/(max_v-min_v) for v in vals]
         colors = [[0, 1.0-v, v, 0.4] if math.isfinite(v) else [1.0,0,0,0.4] for v in vals]
+        for i, o in enumerate(objs):
+            if not objective in o:
+                colors[i] = [1.0,1.0,1.0,0.4]
 
         # Construct the graph
         g = nx.DiGraph()
         for v in verts:
             for p in v.parents:
-                pname = alch_vertex(p).latex_name
+                pname = alch_vertex(self.dir+"/"+p).latex_name
                 g.add_edge(pname, v.latex_name)
         g.add_nodes_from(names)
 
@@ -435,12 +442,11 @@ class alch_network:
         # Draw edges
         for (xy1, xy2) in edges:
             dxy = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
-            centre = [(xy1[0]+xy2[0])/2.0, (xy1[1]+xy2[1])/2.0]
             plt.arrow(xy1[0], xy1[1], dxy[0], dxy[1], head_width=0)
 
         # Draw arrows
         for (xy1, xy2) in edges:
-            dxy = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
+            dxy    = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
             centre = [(xy1[0]+xy2[0])/2.0, (xy1[1]+xy2[1])/2.0]
             plt.arrow(centre[0]-dxy[0]/128, centre[1]-dxy[1]/128, dxy[0]/128, dxy[1]/128,
                       head_width=10, fc="black", ec=None)
@@ -448,7 +454,8 @@ class alch_network:
 
         plt.show()
 
-def plot_alch_network(directory="./"):
+def plot_alch_network(directory=None):
+    if directory is None: directory = os.getcwd()
     logging_enabled(False)
     alch_network(directory).plot()
     logging_enabled(True)

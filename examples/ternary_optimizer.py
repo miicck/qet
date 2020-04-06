@@ -53,7 +53,7 @@ def minus_h_dos(structure):
 
     return -hydrogen_dos/total_dos
 
-def stoichiometry_search():
+def maximize_hdos(muts):
 
     # Load/create the network
     nw = alch_network("network")
@@ -62,11 +62,19 @@ def stoichiometry_search():
     for structure in get_initial_ternaries():
         nw.create_vertex(structure)
 
-    # Allow stoichiometry modifications only
-    muts = [mutations.substitute_random_species,
-            mutations.remove_random_atom,
-            mutations.duplicate_random_atom]
-
     # Optimize the network
     for n in range(0, 100):
         nw.expand_to_minimize("-H_DOS/DOS", minus_h_dos, muts, is_valid=is_valid)
+
+def stoichiometry_search():
+
+    # Allow stoichiometry modifications only
+    maximize_hdos([mutations.substitute_random_species,
+                   mutations.remove_random_atom,
+                   mutations.duplicate_random_atom])
+
+def substitution_search():
+
+    # Allow substitutions only, dont modify the number of atoms
+    maximize_hdos([mutations.substitute_random_species])
+    
