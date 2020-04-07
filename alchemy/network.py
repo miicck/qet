@@ -143,25 +143,38 @@ class alch_vertex:
         with self.lock("parents_lock"):
             par = []
             if not os.path.isfile(self.dir + "/parents"): return par
+
+            # Parse parents file for parent, mutation pairs
             with open(self.dir + "/parents") as f:
                 for line in f:
+
+                    # Ignore blank lines
                     line = line.strip()
                     if len(line) == 0: continue
-                    if line in par: continue
-                    par.append(line)
+                    
+                    # Get [parent, mutation]
+                    splt = line.split()
+                    if len(splt) == 1: splt.append("none")
+
+                    # Get list of unique parent/mutation pairs
+                    if not splt in par: par.append(splt)
+
             return par
 
     # Add a parent vertex
-    def add_parent(self, parent):
+    def add_parent(self, parent, mutation=None):
         with self.lock("parents_lock"):
+
+            # Construct new list of parents, with [parent, muatation] added
             pts = self.parents
-            pdir = parent.dir
-            pdir = pdir.split("/")[-1]
-            if pdir in pts: return
-            pts.append(pdir)
+            new_par = [parent.dir.split("/")[-1], "none" if mutation is None else mutation]
+            if new_par in pts: return # Already in parents list => don't need to add
+            pts.append(new_par)
+
+            # Write the updated parents list
             with open(self.dir + "/parents", "w") as f:
-                for p in pts:
-                    f.write(p+"\n")
+                for (p,m) in pts:
+                    f.write("{0} {1}\n".format(p,m))
 
     # Get my name, in latex format
     @property
@@ -213,7 +226,6 @@ class alch_network:
             created = True
 
         # Use the absolute path from here on
-        print(base_dir)
         base_dir  = os.path.abspath(base_dir)
         self.dir  = base_dir
         self.name = base_dir.split("/")[-1]
@@ -328,7 +340,7 @@ class alch_network:
 
         # Create new vertex
         new_vertex = self.create_vertex(mutation)
-        new_vertex.add_parent(vertex)
+        new_vertex.add_parent(vertex, param_mutation.__name__)
         log(underline, "alchemy.log")
         return new_vertex
 
@@ -373,8 +385,9 @@ class alch_network:
 
     # Plot this network
     def plot(self, objective=None):
-        import matplotlib.pyplot as plt
-        import networkx          as nx
+        import matplotlib.pyplot  as plt
+        import matplotlib.patches as patches
+        import networkx           as nx
             
         # Get the verticies
         verts = self.verticies
@@ -402,16 +415,21 @@ class alch_network:
         max_v = max(v for v in vals if math.isfinite(v))
         min_v = min(v for v in vals if math.isfinite(v))
         vals = [(v-min_v)/(max_v-min_v) for v in vals]
-        colors = [[0, 1.0-v, v, 0.4] if math.isfinite(v) else [1.0,0,0,0.4] for v in vals]
+        colors = [[0.6, 1.0-v*0.4, 0.6+v*0.4] if math.isfinite(v) else [1.0,0.6,0.6] for v in vals]
         for i, o in enumerate(objs):
             if not objective in o:
-                colors[i] = [1.0,1.0,1.0,0.4]
+                colors[i] = [1.0,1.0,1.0]
 
         # Construct the graph
         g = nx.DiGraph()
+        edge_mutations = {}
+        mutation_colors = {}
         for v in verts:
-            for p in v.parents:
+            for (p, m) in v.parents:
                 pname = alch_vertex(self.dir+"/"+p).latex_name
+                edge_mutations[(pname, v.latex_name)] = m
+                if not m in mutation_colors:
+                    mutation_colors[m] = 0.25+0.5*np.random.random(3)
                 g.add_edge(pname, v.latex_name)
         g.add_nodes_from(names)
 
@@ -424,7 +442,7 @@ class alch_network:
         max_y = max(pos[n][1] for n in names)
         min_y = min(pos[n][1] for n in names)
         plt.xlim(min_x, max_x)
-        plt.ylim(min_y, max_y)
+        plt.ylim(min_y, max_y+0.25*(max_y-min_y))
         plt.axis("off")
 
         # Draw nodes
@@ -432,26 +450,37 @@ class alch_network:
             args = dict(
                 verticalalignment="center", 
                 horizontalalignment="center",
+                fontsize="xx-small",
             )
-            plt.annotate(n, pos[n], bbox=dict(facecolor="white"), **args)
-            plt.annotate(n, pos[n], bbox=dict(facecolor=c), **args)
+            bbox_props = dict(
+                facecolor=c,
+                edgecolor="none",
+                boxstyle="square,pad=0.0"
+            )
+            plt.annotate(n, pos[n], bbox=bbox_props, **args)
 
         # Get the edges
-        edges = [[pos[e[0]], pos[e[1]]] for e in g.edges()]
+        edges = [[pos[e[0]], pos[e[1]], edge_mutations[(e[0], e[1])] ] for e in g.edges()]
 
         # Draw edges
-        for (xy1, xy2) in edges:
+        for (xy1, xy2, m) in edges:
             dxy = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
-            plt.arrow(xy1[0], xy1[1], dxy[0], dxy[1], head_width=0)
+            plt.arrow(xy1[0], xy1[1], dxy[0], dxy[1], head_width=0, color=mutation_colors[m])
 
         # Draw arrows
-        for (xy1, xy2) in edges:
+        for (xy1, xy2, m) in edges:
             dxy    = [xy2[0]-xy1[0],xy2[1]-xy1[1]]
             centre = [(xy1[0]+xy2[0])/2.0, (xy1[1]+xy2[1])/2.0]
             plt.arrow(centre[0]-dxy[0]/128, centre[1]-dxy[1]/128, dxy[0]/128, dxy[1]/128,
-                      head_width=10, fc="black", ec=None)
+                      head_width=10, color=mutation_colors[m])
 
+        # Draw a little legend for mutation colors
+        leg_patches = []
+        for m in mutation_colors:
+            leg_patches.append(patches.Patch(color=mutation_colors[m], label=m.replace("_"," ")))
+        plt.legend(handles=leg_patches,title="Mutations",loc="best",fontsize="xx-small")
 
+        plt.gca().set_aspect("equal")
         plt.show()
 
 def plot_alch_network(directory=None):
