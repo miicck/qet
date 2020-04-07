@@ -264,6 +264,50 @@ class alch_network:
         vs = self.verticies
         return vs[random.randrange(len(vs))]
 
+    # Get a list of objective values before and after mutations
+    # indexed by mutation names
+    def get_mutation_results(self, objective_name=None):
+        
+        # Store the before/after objective values
+        # for each mutation type used in the network
+        obj_pairs = {}
+
+        # Loop over verticies
+        verts = self.verticies
+        for v in verts:
+
+            # Get the objective value for this vertex
+            # skip if it has not been evaluated, or is infinite
+            v_objs = v.get_evaluated_objectives()
+
+            # If no objective_name specified, 
+            # just use the first one we find
+            if objective_name is None:
+                for name in v_objs:
+                    objective_name = name
+                    break
+            
+            if not objective_name in v_objs: continue
+            v_obj = v_objs[objective_name]
+            if not math.isfinite(v_obj): continue
+
+            # Loop over parents of v
+            for (p, m) in v.parents:
+                
+                # Load the parent vertex, get the objective
+                pv = alch_vertex(self.dir+"/"+p)
+                p_objs = pv.get_evaluated_objectives()
+                if not objective_name in p_objs: continue
+                p_obj = p_objs[objective_name]
+                if not math.isfinite(p_obj): continue
+
+                # Store the before (parent) and after (vertex v)
+                # objective values
+                if not m in obj_pairs: obj_pairs[m] = []
+                obj_pairs[m].append([p_obj, v_obj])
+
+        return obj_pairs
+
     # Attempt to create a new vertex with the given parameters
     # if the vertex already exists, it will return that
     # if it fails it will return None
@@ -488,6 +532,14 @@ def plot_alch_network(directory=None):
     logging_enabled(False)
     alch_network(directory).plot()
     logging_enabled(True)
+
+def get_network_info(directory=None):
+    if directory is None: directory = os.getcwd()
+    logging_enabled(False)
+    nw = alch_network(directory)
+    logging_enabled(True)
+
+    print(nw.get_mutation_results())
 
 ##########################
 # TESTS FOR ALCH_NETWORK #
