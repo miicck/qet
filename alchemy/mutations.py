@@ -76,3 +76,10 @@ def shuffle_atoms(structure):
 
     return structure
 
+# All of the above mutations
+all_mutations = [
+    substitute_random_species,
+    remove_random_atom,
+    duplicate_random_atom,
+    shuffle_atoms,
+]

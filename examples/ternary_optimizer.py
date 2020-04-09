@@ -64,7 +64,12 @@ def maximize_hdos(muts):
 
     # Optimize the network
     for n in range(0, 100):
-        nw.expand_to_minimize("-H_DOS/DOS", minus_h_dos, muts, is_valid=is_valid)
+        nw.expand_to_minimize(minus_h_dos, muts, is_valid=is_valid)
+
+def general_search():
+
+    # Search using all mutations available
+    maximize_hdos(mutations.all_mutations)
 
 def stoichiometry_search():
 
@@ -77,4 +82,3 @@ def substitution_search():
 
     # Allow substitutions only, dont modify the number of atoms
     maximize_hdos([mutations.substitute_random_species])
-    

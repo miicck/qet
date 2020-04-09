@@ -47,16 +47,16 @@ class alch_vertex:
 
     # Evaluate the given objective function
     # on the parameter set for this vertex
-    def objective(self, objective_name, objective_function):
+    def objective(self, objective):
 
         # Return stored objective value
         stored = self.get_evaluated_objectives()
-        if objective_name in stored: 
-            return stored[objective_name]
+        if objective.__name__ in stored: 
+            return stored[objective.__name__]
 
         # Attempt to evaluate the objective. 
         #
-        # If evaluataion fails (i.e the underlying objective_function
+        # If evaluataion fails (i.e the underlying objective
         # could not be evaluated), the objective is set to inf.
         #
         # If evaluation is already underway on another process (i.e we cannot 
@@ -73,7 +73,7 @@ class alch_vertex:
                 try:
                     # Attempt to evaluate the objective
                     log("Evaluating objective in {0}".format(self.name), "alchemy.log")
-                    obj = objective_function(self.params)
+                    obj = objective(self.params)
 
                     # If the objective has length 2, we assume it has the form
                     # [objective value, new structure]. If it has length 1 assume 
@@ -94,19 +94,19 @@ class alch_vertex:
                             obj = obj[0]
 
                     fs = "evaluated objective in {2}\n    {0} = {1}"
-                    log(fs.format(objective_name, obj, self.name), "alchemy.log")
+                    log(fs.format(objective.__name__, obj, self.name), "alchemy.log")
 
                 except Exception as e:
                     # Failed to evaluate the objective, set it to inf
                     fs = "failed to evaluate the objective\n    {0} in {1}"
-                    log(fs.format(objective_name, self.name), "alchemy.log")
+                    log(fs.format(objective.__name__, self.name), "alchemy.log")
                     log("error: {0}".format(e), "alchemy.log")
                     obj = float("inf")
 
                 # Write the values of all the objectives to file
                 with self.lock("obj_file_lock"):
                     stored = self.get_evaluated_objectives()
-                    stored[objective_name] = obj
+                    stored[objective.__name__] = obj
                     with open("objectives", "w") as f:
                         for o in stored:
                             f.write("{0}:{1}\n".format(o, stored[o]))
@@ -266,7 +266,7 @@ class alch_network:
 
     # Get a list of objective values before and after mutations
     # indexed by mutation names
-    def get_mutation_results(self, objective_name=None):
+    def get_mutation_results(self, objective=None):
         
         # Store the before/after objective values
         # for each mutation type used in the network
@@ -280,15 +280,16 @@ class alch_network:
             # skip if it has not been evaluated, or is infinite
             v_objs = v.get_evaluated_objectives()
 
-            # If no objective_name specified, 
+            # If no objective specified, 
             # just use the first one we find
-            if objective_name is None:
+            if objective is None:
                 for name in v_objs:
-                    objective_name = name
+                    objective = lambda p : float("inf")
+                    objective.__name__ = name
                     break
             
-            if not objective_name in v_objs: continue
-            v_obj = v_objs[objective_name]
+            if not objective.__name__ in v_objs: continue
+            v_obj = v_objs[objective.__name__]
             if not math.isfinite(v_obj): continue
 
             # Loop over parents of v
@@ -297,16 +298,108 @@ class alch_network:
                 # Load the parent vertex, get the objective
                 pv = alch_vertex(self.dir+"/"+p)
                 p_objs = pv.get_evaluated_objectives()
-                if not objective_name in p_objs: continue
-                p_obj = p_objs[objective_name]
+                if not objective.__name__ in p_objs: continue
+                p_obj = p_objs[objective.__name__]
                 if not math.isfinite(p_obj): continue
 
                 # Store the before (parent) and after (vertex v)
                 # objective values
                 if not m in obj_pairs: obj_pairs[m] = []
-                obj_pairs[m].append([p_obj, v_obj])
+                obj_pairs[m].append([[pv, p_obj], [v, v_obj]])
 
         return obj_pairs
+
+    # Score each of the mutations in this network
+    def get_mutation_scores(self, objective=None, plot=False):
+        res = self.get_mutation_results(objective=objective)
+
+        if plot: import matplotlib.pyplot as plt
+
+        # Work out the minimum and maximum valus of the objective
+        min_obj =  float("inf")
+        max_obj = -float("inf")
+        for m in res:
+            pairs = res[m]
+            for p in pairs:
+                for o in [p[0][1], p[1][1]]:
+                    if o > max_obj: max_obj = o
+                    if o < min_obj: min_obj = o
+
+        scores = {}
+        for m in res:
+
+            # Get the before/after objective pairs
+            pairs = res[m]
+
+            # Score/weight each objective pair
+            pair_scores = []
+            total_weight = 0.0
+            for p in pairs:
+
+                # Lend more weight to low-objective final structures
+                if abs(max_obj - min_obj) > 10e-5:
+                    weight = (max_obj - p[1][1])/(max_obj - min_obj)
+                else:
+                    weight = 1.0
+                total_weight += weight
+
+                # Score proportional to weight and decrease in objective
+                pair_scores.append( (p[0][1] - p[1][1]) * weight )
+
+            if total_weight == 0: scores[m] = 0
+            else: scores[m] = sum(pair_scores)/total_weight
+
+            if plot:
+                plt.hist(pair_scores, label=m, alpha=0.4)
+
+        if plot:
+            plt.legend()
+            plt.show()
+
+        return scores
+
+    def choose_mutation(self, mutations, objective=None):
+        
+        # Get scores for mutations that already appear in the network
+        scores    = self.get_mutation_scores(objective=objective)
+        max_score = max(scores[m] for m in scores) if len(scores) > 0 else 1.0
+
+        # Give untested mutations a high score (so they will be tested soon)
+        for m in mutations:
+            if not m in scores:
+                scores[m] = max_score
+
+        # Rescale scores to [-1,1] by dividing by the
+        # maximum absolute score (note scores of 0 remain unchanged).
+        # This is done to decrease score sensitivity to the order 
+        # of magnidute of the objective function.
+        max_abs = max(abs(scores[m]) for m in scores) 
+        if max_abs > 10e-5:
+            scores  = {m : scores[m]/max_abs for m in scores}
+
+        # Map to [0, 1]
+        scores  = {m : (1.0 + scores[m])/2.0 for m in scores}
+
+        # Generate probabilities so that the maximum possible
+        # ratio between most and least probable is 10 : 1
+        probs = {m : 10.0**scores[m] for m in scores}
+        tot   = sum(probs[m] for m in probs)
+        probs = {m : probs[m]/tot for m in probs}
+        
+        # Report the probabilities
+        max_l = max(len(m) for m in probs)
+        fs    = "    {0:"+str(max_l)+"} {1}"
+        log("Mutation probabilities:", "alchemy.log")
+        for m in probs: log(fs.format(m, probs[m]), "alchemy.log")
+
+        # Choose according to that probability
+        rnd = random.random()
+        tot = 0.0
+        for m in probs:
+            tot += probs[m]
+            if tot > rnd: return m
+
+        raise Exception("Should not be able to get here!")
 
     # Attempt to create a new vertex with the given parameters
     # if the vertex already exists, it will return that
@@ -397,33 +490,37 @@ class alch_network:
         weights = [weight(v) for v in verts]
         return random.choices(verts, weights=weights)[0]
 
-    # By default choose vertex by exp(-objective) weighting
-    def default_vertex_chooser(self, objective_name, objective_function):
+    # Choose a vertex by exp(-objective) weighting
+    def vertex_chooser(self, objective):
         
-        wf = lambda v : np.exp(-v.objective(objective_name, objective_function))
+        wf = lambda v : np.exp(-v.objective(objective))
         return self.random_weighted_vertex(weight = wf)
 
     # Expand the network with an aim to minimize the given objective
     # will choose a vertex with low objective value and expand it using
     # one of the given mutations
     def expand_to_minimize(self,
-        objective_name,     # Name of objective to minimize
-        objective_function, # Objective to minimize
-        mutations,          # List of allowed mutations to vertex parameters
+        objective, # Objective to minimize
+        mutations, # List of allowed mutations to vertex parameters
         # Function used to determine if a mutated structure is valid
-        is_valid = lambda s : True,
-        # The function to choose a vertex to expand from a network
-        vertex_chooser = lambda n, on, of : n.default_vertex_chooser(on, of)
+        is_valid = lambda s : True
         ):
 
         if len(mutations) == 0:
             raise Exception("No mutations specified in expand_to_minimize")
 
-        # For now, choose a random mutation
-        mut = mutations[random.randrange(len(mutations))]
+        log("Choosing a mutation to apply (minimizing {0})".format(objective.__name__), "alchemy.log")
+        mut_name = self.choose_mutation([m.__name__ for m in mutations], objective=objective)
+        mut = None
+        for m in mutations:
+            if m.__name__ == mut_name:
+                mut = m
+                break
+        if mut is None: mut = random.choice(mutations)
+        log("Selected mutation {0}".format(mut.__name__), "alchemy.log")
 
-        log("Choosing vertex to expand (minimizing {0})...".format(objective_name), "alchemy.log")
-        vert = vertex_chooser(self, objective_name, objective_function)
+        log("Choosing vertex to expand (minimizing {0})...".format(objective.__name__), "alchemy.log")
+        vert = self.vertex_chooser(objective)
         log("Vertex chosen: "+vert.name, "alchemy.log")
         self.expand_vertex(vert, mut, is_valid)
 
@@ -533,14 +630,6 @@ def plot_alch_network(directory=None):
     alch_network(directory).plot()
     logging_enabled(True)
 
-def get_network_info(directory=None):
-    if directory is None: directory = os.getcwd()
-    logging_enabled(False)
-    nw = alch_network(directory)
-    logging_enabled(True)
-
-    print(nw.get_mutation_results())
-
 ##########################
 # TESTS FOR ALCH_NETWORK #
 ##########################
@@ -552,16 +641,16 @@ def min_atoms_test():
     nw = alch_network("test_network")
     v  = nw.create_vertex(lah10_fm3m)
 
-    obj_name = "atom count"
-    obj_func = lambda s : len(s["atoms"])
-    muts     = [mutations.substitute_random_species,
-                mutations.remove_random_atom,
-                mutations.duplicate_random_atom]
+    obj_func          = lambda s : len(s["atoms"])
+    obj_func.__name__ = "atom_count"
+    muts              = [mutations.substitute_random_species,
+                         mutations.remove_random_atom,
+                         mutations.duplicate_random_atom]
 
     for n in range(100):
-        nw.expand_to_minimize(obj_name, obj_func, muts)
+        nw.expand_to_minimize(obj_func, muts)
 
-def get_minus_dos_ef(structure):
+def minus_dos_ef(structure):
     from qet.calculations import relax, dos
 
     # Relax the structure 
@@ -583,7 +672,7 @@ def metal_test():
     from qet.test.test_systems import bcc_lithium
     from qet.alchemy           import mutations
 
-    #bcc_lithium["cores_per_node"] = 1
+    bcc_lithium["cores_per_node"] = 4 # Allow us to sneak this calculation on a login node
     bcc_lithium["pseudo_dir"]     = "/home/mjh261/rds/rds-t2-cs084/pseudopotentials/gbrv"
     nw = alch_network("metals_network")
     v  = nw.create_vertex(bcc_lithium)
@@ -593,4 +682,4 @@ def metal_test():
             mutations.duplicate_random_atom]
 
     for n in range(100):
-        nw.expand_to_minimize("-DOS (E_F)", get_minus_dos_ef, muts)
+        nw.expand_to_minimize(minus_dos_ef, muts)
