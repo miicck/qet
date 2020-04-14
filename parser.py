@@ -62,6 +62,9 @@ class output_file:
     def __setitem__(self, key, value):
         self.dict[key] = value
 
+    def __contains__(self, key):
+        return key in self.dict
+
     # Parse things common to all scf type files
     def parse_scf_things(self, filename):   
         
@@ -306,3 +309,42 @@ class proj_dos_out(output_file):
                         d = ldos[i] * f + ldos[i-1] * (1-f)
                         self[k][atom_num][wfc_num] = d
                         break
+
+class a2f_dos_out(output_file):
+
+    def parse(self, filename):
+
+        data = []
+        with open(filename) as f:
+            for line in f:
+                
+                # Deal with the lambda line
+                if "lambda" in line:
+                    self["lambda"] = float(line.split()[2])
+                    continue
+
+                # Skip non-numerical lines
+                if not "." in line:
+                    continue
+
+                try:
+                    # Sometimes q.e forgets to write the E for
+                    # large exponents
+                    words = line.split()
+                    for i in range(0, len(words)):
+                        if "E" in words[i]: continue
+                        if "-" in words[i][1:]:
+                            words[i] = "E".join(words[i].split("-"))
+                        if "+" in words[i][1:]:
+                            words[i] = "E".join(words[i].split("+"))
+                    dat = [float(w) for w in words]
+                    data.append(dat)
+                except:
+                    print("could not parse a2F line: "+line)
+                    continue
+        
+        data = list(zip(*data))
+        self["frequencies"] = data[0]
+        self["a2f"] = data[1]
+        for i in range(2, len(data)):
+            self["a2f_mode_{0}".format(i-1)] = data[i]

@@ -20,19 +20,25 @@ class parameters:
         # result in QE default values being used
         self.par = {}
 
-        self["outdir"]          = "./"           # outdir = working dir
-        self["ibrav"]           = 0              # no bravis-lattice index
-        self["ecutwfc"]         = 60             # plane-wave cutoff (Ry)
-        self["occupations"]     = "smearing"     # treat as metallic
-        self["degauss"]         = 0.02           # metal smearing width (Ry)
-        self["qpoint_spacing"]  = 0.1            # qpoint spacing (2pi A^-1)
-        self["kpts_per_qpt"]    = 6              # ratio of kpt to qpt grid
-        self["ldisp"]           = True           # use a grid of q-points
-        self["reduce_io"]       = True           # reduce io to a strict minimum
-        self["fildvscf"]        = "dvscf"        # potential variation file
-        self["electron_phonon"] = "interpolated" # electron-phonon method
-        self["el_ph_sigma"]     = 0.005          # smearing spacing
-        self["el_ph_nsigma"]    = 50             # smearing points
+        self["outdir"]           = "./"              # outdir = working dir
+        self["ibrav"]            = 0                 # no bravis-lattice index
+        self["ecutwfc"]          = 60                # plane-wave cutoff (Ry)
+        self["occupations"]      = "smearing"        # treat as metallic
+        self["degauss"]          = 0.02              # metal smearing width (Ry)
+        self["qpoint_spacing"]   = 0.1               # qpoint spacing (2pi A^-1)
+        self["kpts_per_qpt"]     = 6                 # ratio of kpt to qpt grid
+        self["ldisp"]            = True              # use a grid of q-points
+        self["reduce_io"]        = True              # reduce io to a strict minimum
+        self["fildvscf"]         = "dvscf"           # potential variation file
+        self["electron_phonon"]  = "interpolated"    # electron-phonon method
+        self["el_ph_sigma"]      = 0.005             # smearing spacing
+        self["el_ph_nsigma"]     = 50                # smearing points
+        self["fildyn"]           = "matdyn"          # dynamical matrix prefix
+        self["flfrc"]            = "force_constants" # force constants filename
+        self["zasr"]             = "simple"          # acoustic sum rule to apply
+        self["ph_interp_amt"]    = 10                # phonon interpolation grid size (as multiple of qpoint_grid)
+        self["ndos"]             = 500               # number of energy steps to use when interpolating DOS
+        self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -130,6 +136,17 @@ class parameters:
         if key == "nq2": return self["qpoint_grid"][1]
         if key == "nq3": return self["qpoint_grid"][2]
 
+        # Get individial components of interpolated qpoint grid
+        if key == "ph_interp_nq1": return self["qpoint_grid"][0]*self["ph_interp_amt"]
+        if key == "ph_interp_nq2": return self["qpoint_grid"][0]*self["ph_interp_amt"]
+        if key == "ph_interp_nq3": return self["qpoint_grid"][0]*self["ph_interp_amt"]
+
+        # Phonon interpolation output files from prefix
+        if key == "ph_interp_dos_file":   return self["ph_interp_prefix"] + ".dos"
+        if key == "ph_interp_freq_file":  return self["ph_interp_prefix"] + ".freq"
+        if key == "ph_interp_modes_file": return self["ph_interp_prefix"] + ".modes"
+        if key == "ph_interp_eig_file":   return self["ph_interp_prefix"] + ".eig"
+
         # Generate the kpoint grid
         if key == "kpoint_grid":
 
@@ -193,7 +210,7 @@ class parameters:
 
 
     # Convert a parameter to an input line in a QE file
-    def to_input_line(self, key):
+    def to_input_line(self, key, name=None):
 
         # Return nothing if the key is absent
         # so the QE default value will be used
@@ -201,6 +218,9 @@ class parameters:
             val = self[key]
         except:
             return ""
+
+        # Allow name different from key
+        if not name is None: key = name
 
         # Bool type
         if isinstance(val, bool):

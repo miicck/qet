@@ -327,7 +327,7 @@ class electron_phonon_grid(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return phonon_grid_out(outf)
+        return None
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -353,6 +353,70 @@ class electron_phonon_grid(calculation):
         # the input file doesn't end in a blank line
         return pad_input_file(s) + "\n"
 
+# Convert reciprocal space quantities to real-space quantitites
+class q2r(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "q2r.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "q2r"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return None
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        s  = "&INPUT\n"
+        s += self.in_params.to_input_line("fildyn")
+        s += self.in_params.to_input_line("flfrc")
+        s += self.in_params.to_input_line("zasr")
+        s += self.in_params.to_input_line("la2F")
+        s += self.in_params.to_input_line("el_ph_nsigma")
+        s += "/\n"
+
+        return pad_input_file(s)
+
+# Interpolate phonon quantities onto a fine grid 
+class interpolate_phonon(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "matdyn.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return self.in_params["ph_interp_prefix"]
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return None
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        s  = "&INPUT\n"
+        s += "dos = .true.\n"
+        s += self.in_params.to_input_line("flfrc")
+        s += self.in_params.to_input_line("zasr",          name="asr")
+        s += self.in_params.to_input_line("ph_interp_nq1", name="nk1")
+        s += self.in_params.to_input_line("ph_interp_nq2", name="nk2")
+        s += self.in_params.to_input_line("ph_interp_nq3", name="nk3")
+        s += self.in_params.to_input_line("ndos")
+        s += self.in_params.to_input_line("ph_interp_dos_file",   name="fldos")
+        s += self.in_params.to_input_line("ph_interp_freq_file",  name="flfrq")
+        s += self.in_params.to_input_line("ph_interp_modes_file", name="flvec")
+        s += self.in_params.to_input_line("la2F")
+        s += self.in_params.to_input_line("el_ph_nsigma")
+        s += "/\n"
+
+        return pad_input_file(s)
+    
+
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
 def calculate_tc(parameters):
@@ -369,3 +433,5 @@ def calculate_tc(parameters):
     # Run the succesion of neccasary calculations
     scf(parameters).run()
     electron_phonon_grid(parameters).run()
+    q2r(parameters).run()
+    interpolate_phonon(parameters).run()

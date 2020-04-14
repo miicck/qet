@@ -1,12 +1,13 @@
-from   qet.parser        import proj_dos_out, dos_out
-import matplotlib.pyplot as     plt
+import qet.parser        as parser
+import qet.constants     as constants
+import matplotlib.pyplot as plt
 
 # Plot the density of states calculated
 # with output file given by filename
 def plot_dos(filename="./dos.out"):
     
     # Parse the DOS
-    out = dos_out(filename)
+    out = parser.dos_out(filename)
 
     plt.plot(out["DOS energies"], out["DOS (energy)"], color="blue", label="DOS ($E$)")
     plt.axvline(out["fermi energy"], color="red", label="Fermi energy")
@@ -19,7 +20,7 @@ def plot_dos(filename="./dos.out"):
 def plot_proj_dos(filename="./proj_dos.out"):
     
     # Parse the projected density of states
-    out = proj_dos_out(filename)
+    out = parser.proj_dos_out(filename)
 
     dos_plot = plt.subplot(211)
     df_plot  = plt.subplot(212)
@@ -65,4 +66,33 @@ def plot_proj_dos(filename="./proj_dos.out"):
         df_plot.text(x[i], 0, "  " + labels[i], rotation=90)
 
     # Show the plot
+    plt.show()
+
+def plot_a2f(filename="./a2F.dos1"):
+    
+    out = parser.a2f_dos_out(filename)
+
+    # Convert frequencies to Cm^-1
+    ws = out["frequencies"] 
+    ws = [w*constants.RY_TO_CMM1 for w in ws]
+
+    # Run over mode-resolved eliashberg functions
+    total  = None
+    i_mode = 1
+    while "a2f_mode_{0}".format(i_mode) in out:
+
+        # Get this constribution and the cumulative total
+        a2f_mode = out["a2f_mode_{0}".format(i_mode)]
+        if total is None: total = [0.0 for a in a2f_mode]
+        new_total = [t+a for t,a in zip(total, a2f_mode)]
+
+        # Fill in this contribution
+        plt.fill_between(ws, total, new_total)
+    
+        # Move to next node
+        total = new_total
+        i_mode += 1
+
+    plt.xlabel("Frequency $\\omega$ (cm$^{-1}$)")
+    plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
