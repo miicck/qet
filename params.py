@@ -20,14 +20,19 @@ class parameters:
         # result in QE default values being used
         self.par = {}
 
-        self["outdir"]         = "./"          # outdir = working dir
-        self["ibrav"]          = 0             # no bravis-lattice index
-        self["ecutwfc"]        = 60            # plane-wave cutoff (Ry)
-        self["ecutrho"]        = 600           # density cutoff (Ry)
-        self["occupations"]    = "smearing"    # treat as metallic
-        self["degauss"]        = 0.02          # metal smearing width (Ry)
-        self["qpoint_spacing"] = 0.1           # qpoint spacing (2pi A^-1)
-        self["kpts_per_qpt"]   = 6             # ratio of kpt to qpt grid
+        self["outdir"]          = "./"           # outdir = working dir
+        self["ibrav"]           = 0              # no bravis-lattice index
+        self["ecutwfc"]         = 60             # plane-wave cutoff (Ry)
+        self["occupations"]     = "smearing"     # treat as metallic
+        self["degauss"]         = 0.02           # metal smearing width (Ry)
+        self["qpoint_spacing"]  = 0.1            # qpoint spacing (2pi A^-1)
+        self["kpts_per_qpt"]    = 6              # ratio of kpt to qpt grid
+        self["ldisp"]           = True           # use a grid of q-points
+        self["reduce_io"]       = True           # reduce io to a strict minimum
+        self["fildvscf"]        = "dvscf"        # potential variation file
+        self["electron_phonon"] = "interpolated" # electron-phonon method
+        self["el_ph_sigma"]     = 0.005          # smearing spacing
+        self["el_ph_nsigma"]    = 50             # smearing points
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -40,11 +45,14 @@ class parameters:
             self["cores_per_node"] = 1
 
         # Default the pseudopotential directory to
+        # $PSEUDO_DIR if it is defined, or
         # home/pseudopotentials if $HOME is defined
         # otherwise set to "./"
         self["pseudo_dir"] = "./"
         if "HOME" in os.environ:
             self["pseudo_dir"] = os.environ["HOME"]+"/pseudopotentials"
+        if "PSEUDO_DIR" in os.environ:
+            self["pseudo_dir"] = os.environ["PSEUDO_DIR"]
 
         if not filename is None:
             self.load(filename)
@@ -105,6 +113,9 @@ class parameters:
                 vol += elements[a[0]]["covalent radius"]**3.0
             return np.pi * vol * 4.0/3.0
 
+        # Default to ecutrho = 10*ecutwfc
+        if key == "ecutrho": return 10*self["ecutwfc"]
+
         # Generate the qpoint grid
         if key == "qpoint_grid":
             
@@ -113,6 +124,11 @@ class parameters:
             qps  = float(self["qpoint_spacing"])
             b2q  = lambda b : int(np.linalg.norm(b)/qps)
             return [b2q(b) for b in rlat]
+
+        # Get individual components of qpoint grid
+        if key == "nq1": return self["qpoint_grid"][0]
+        if key == "nq2": return self["qpoint_grid"][1]
+        if key == "nq3": return self["qpoint_grid"][2]
 
         # Generate the kpoint grid
         if key == "kpoint_grid":

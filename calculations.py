@@ -65,6 +65,7 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += params.to_input_line("occupations")
     s += params.to_input_line("smearing")
     s += params.to_input_line("degauss")
+    s += params.to_input_line("la2F")
     s += "/\n\n"
 
     # Electrons namelist
@@ -301,14 +302,70 @@ class phonon_grid(calculation):
         s  = "Calculate phonons on a coarse grid\n"
         s += "&INPUTPH\n"
         s += self.in_params.to_input_line("outdir")
-        if recover:
-            s += "    recover = .true.,\n"
-        s += "    ldisp = .true.,\n"
-        s += "    nq1 = {0},\n".format(qpg[0])
-        s += "    nq2 = {0},\n".format(qpg[1])
-        s += "    nq3 = {0},\n".format(qpg[1])
+        s += self.in_params.to_input_line("ldisp")
+        s += self.in_params.to_input_line("reduce_io")
+        s += self.in_params.to_input_line("nq1")
+        s += self.in_params.to_input_line("nq2")
+        s += self.in_params.to_input_line("nq3")
+        if recover: s += "    recover = .true.,\n"
         s += "/\n"
 
         # I've found ph.x sometimes crashes if 
         # the input file doesn't end in a blank line
         return pad_input_file(s) + "\n"
+
+# Calculate electron-phonon coupling on a grid
+class electron_phonon_grid(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "ph.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "elph"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return phonon_grid_out(outf)
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+
+        qpg = self.in_params["qpoint_grid"]
+
+        s  = "Calculate electron-phonon coupling on a coarse grid\n"
+        s += "&INPUTPH\n"
+        s += self.in_params.to_input_line("outdir")
+        s += self.in_params.to_input_line("ldisp")
+        s += self.in_params.to_input_line("reduce_io")
+        s += self.in_params.to_input_line("fildvscf")
+        s += self.in_params.to_input_line("electron_phonon")
+        s += self.in_params.to_input_line("nq1")
+        s += self.in_params.to_input_line("nq2")
+        s += self.in_params.to_input_line("nq3")
+        s += self.in_params.to_input_line("el_ph_sigma")
+        s += self.in_params.to_input_line("el_ph_nsigma")
+        if recover: s += "    recover = .true.,\n"
+        s += "/\n"
+
+        # I've found ph.x sometimes crashes if 
+        # the input file doesn't end in a blank line
+        return pad_input_file(s) + "\n"
+
+# Calculate the conventional superconducting critical temeprature
+# for a given parameter set
+def calculate_tc(parameters):
+
+    # relax the structure
+    res = relax(parameters).run()
+    parameters["atoms"]   = res["relaxed atoms"]
+    parameters["lattice"] = res["relaxed lattice"]
+
+    # We're gonna need the Eliashberg function
+    # from the next scf calculation 
+    parameters["la2F"] = True
+
+    # Run the succesion of neccasary calculations
+    scf(parameters).run()
+    electron_phonon_grid(parameters).run()

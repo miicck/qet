@@ -524,11 +524,42 @@ class alch_network:
         log("Vertex chosen: "+vert.name, "alchemy.log")
         self.expand_vertex(vert, mut, is_valid)
 
+    # Rank the verticies in this network by the given objective
+    # if objective=None, rank according to the first objective found
+    def rank(self, objective=None, filename=None):
+        if filename is None: filename = self.name+".rankings"
+        if hasattr(objective, "__name__"): objective = objective.__name__
+
+        results = []
+
+        verts = self.verticies
+        for v in verts:
+            eo  = v.get_evaluated_objectives()
+
+            if objective is None:
+                for o in eo:
+                    objective = o
+                    break
+
+            obj = float("inf")
+            if objective in eo: obj = eo[objective]
+            results.append([v.name, obj])
+
+        results.sort(key=lambda r:r[1])
+        max_l = max(len(r[0]) for r in results)
+        fs = "{0:"+str(max_l)+"} {1}\n"
+
+        with open(filename, "w") as f:
+            f.write(fs.format("vertex", objective))
+            for r in results: f.write(fs.format(*r))
+        
+
     # Plot this network
-    def plot(self, objective=None):
+    def plot(self, pickle_fig=False, objective=None):
         import matplotlib.pyplot  as plt
         import matplotlib.patches as patches
         import networkx           as nx
+        if pickle_fig: import pickle
             
         # Get the verticies
         verts = self.verticies
@@ -622,12 +653,19 @@ class alch_network:
         plt.legend(handles=leg_patches,title="Mutations",loc="best",fontsize="xx-small")
 
         plt.gca().set_aspect("equal")
-        plt.show()
+        if pickle_fig: pickle.dump(plt.gcf(), open("plot.pickle", "wb"))
+        else: plt.show()
 
-def plot_alch_network(directory=None):
+def plot_alch_network(directory=None, pickle=False):
     if directory is None: directory = os.getcwd()
     logging_enabled(False)
-    alch_network(directory).plot()
+    alch_network(directory).plot(pickle_fig=pickle)
+    logging_enabled(True)
+
+def rank_alch_network(directory=None, filename=None):
+    if directory is None: directory = os.getcwd()
+    logging_enabled(False)
+    alch_network(directory).rank(objective=None, filename=filename)
     logging_enabled(True)
 
 ##########################

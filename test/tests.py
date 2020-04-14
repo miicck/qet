@@ -1,7 +1,25 @@
 import os
 from   qet.test.test_systems import lah10_fm3m
-from   qet.calculations      import relax, phonon_grid, dos, proj_dos
+from   qet.calculations      import relax, phonon_grid, dos, proj_dos, calculate_tc
 from   qet.logs              import log
+
+def test_tc_calculator():
+    
+    # Create and move to a directory to
+    # run the test from
+    old_path = os.getcwd()
+    os.system("mkdir lah10_fm3m_tc_test")
+    os.chdir("lah10_fm3m_tc_test")
+
+    # Use cheapish parameters
+    lah10_fm3m["kpts_per_qpt"] = 3
+    lah10_fm3m["ecutwfc"]      = 40
+
+    try: calculate_tc(lah10_fm3m)
+    except: pass
+
+    # Restore old directory
+    os.chdir(old_path)
 
 def run_test_lah10_fm3m():
     
