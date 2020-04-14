@@ -1,6 +1,7 @@
 import qet.parser        as parser
 import qet.constants     as constants
 import matplotlib.pyplot as plt
+import os
 
 # Plot the density of states calculated
 # with output file given by filename
@@ -95,4 +96,52 @@ def plot_a2f(filename="./a2F.dos1"):
 
     plt.xlabel("Frequency $\\omega$ (cm$^{-1}$)")
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
+    plt.show()
+
+def plot_tc_vs_smearing(directory="./"):
+    from qet.calculations import tc_from_a2f_allen_dynes
+
+    tcs1 = []
+    tcs2 = []
+
+    # Loop over a2f.dos files
+    for f in os.listdir(directory):
+        if not "a2F.dos" in f: continue
+        f = directory+"/"+f 
+
+        try:
+            # Get tc for two different mu* values
+            tcs        = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
+            n          = int(f.split("a2F.dos")[-1])
+            tcs1.append([n, tcs[0.1]])
+            tcs2.append([n, tcs[0.15]])
+
+        except: continue
+
+    tcs1.sort()
+    tcs2.sort()
+
+    ns, tc1 = zip(*tcs1)
+    ns, tc2 = zip(*tcs2)
+
+    # Attempt to find el_ph_sigma in .in files
+    el_ph_sigma = None
+    for f in os.listdir(directory):
+        if not f.endswith(".in"): continue
+        f = directory+"/"+f
+
+        with open(f) as of:
+            for line in of:
+                if "el_ph_sigma" in line:
+                    el_ph_sigma = float(line.split("=")[-1].replace(",",""))
+                    break
+
+    if el_ph_sigma is None: 
+        plt.xlabel("Smearing number")
+    else:
+        ns = [el_ph_sigma*n for n in ns]
+        plt.xlabel("Smearing width $\\sigma$ (Ry)")
+
+    plt.fill_between(ns, tc1, tc2, alpha=0.5)
+    plt.ylabel("$T_C$ (allen-dynes with $\\mu^* \\in [0.1, 0.15]$)")
     plt.show()

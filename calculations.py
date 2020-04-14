@@ -1,7 +1,7 @@
 import os
 import subprocess
+import qet.parser as parser
 from   qet.logs   import log
-from   qet.parser import scf_out, relax_out, phonon_grid_out, dos_out, proj_dos_out
 
 # Pad the equals signs in the input file
 # so they line up nicely :)
@@ -185,7 +185,7 @@ class scf(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return scf_out(outf)
+        return parser.scf_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -213,7 +213,7 @@ class dos(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return dos_out(outf)
+        return parser.dos_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -239,7 +239,7 @@ class proj_dos(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return proj_dos_out(outf)
+        return parser.proj_dos_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -265,7 +265,7 @@ class relax(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return relax_out(outf)
+        return parser.relax_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -292,7 +292,7 @@ class phonon_grid(calculation):
 
     # Parse calculation output
     def parse_output(self, outf):
-        return phonon_grid_out(outf)
+        return parser.phonon_grid_out(outf)
 
     # Generate the input file for this calculation
     def gen_input_file(self, recover=False):
@@ -416,6 +416,32 @@ class interpolate_phonon(calculation):
 
         return pad_input_file(s)
     
+# For a given a2f.dos file, calculate Tc for
+# each of the given mu* values, using the allen-dynes
+# equation
+def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
+    import numpy         as     np
+    from   qet.constants import RY_TO_K
+
+    # Parse the a2f file, ignore negative frequencies
+    out = parser.a2f_dos_out(filename)
+    wa  = [[w,a] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
+    ws  = [w for w,a in wa]
+
+    # Use the allen-dynes equation to estimate Tc
+    lam  = np.trapz([2*a/w for w, a in wa], x=ws)
+    wlog = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=ws))
+    wrms = ((2/lam)*np.trapz([a*w for w, a in wa], x=ws))**0.5
+
+    tc_ad = {}
+    for mu in mu_stars:
+        g1 = 2.46*(1+3.8*mu)
+        g2 = 1.82*(1+6.3*mu)*(wrms/wlog)
+        f1 = (1+(lam/g1)**(3.0/2.0))**(1.0/3.0)
+        f2 = 1 + (wrms/wlog - 1) * (lam**2) / (lam**2 + g2**2)
+        tc_ad[mu] = RY_TO_K*f1*f2*(wlog/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
+
+    return tc_ad
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set

@@ -343,6 +343,7 @@ class a2f_dos_out(output_file):
                     print("could not parse a2F line: "+line)
                     continue
         
+        # Transpose the data and store
         data = list(zip(*data))
         self["frequencies"] = data[0]
         self["a2f"] = data[1]

@@ -36,8 +36,8 @@ class parameters:
         self["fildyn"]           = "matdyn"          # dynamical matrix prefix
         self["flfrc"]            = "force_constants" # force constants filename
         self["zasr"]             = "simple"          # acoustic sum rule to apply
-        self["ph_interp_amt"]    = 10                # phonon interpolation grid size (as multiple of qpoint_grid)
-        self["ndos"]             = 500               # number of energy steps to use when interpolating DOS
+        self["ph_interp_amt"]    = 8                 # phonon interpolation grid size (as multiple of qpoint_grid)
+        self["ndos"]             = 200               # number of energy steps to use when interpolating DOS
         self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
 
         # By default, assume cores_per_node is
