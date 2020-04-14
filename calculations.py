@@ -447,17 +447,52 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
 # for a given parameter set
 def calculate_tc(parameters):
 
-    # relax the structure
-    res = relax(parameters).run()
-    parameters["atoms"]   = res["relaxed atoms"]
-    parameters["lattice"] = res["relaxed lattice"]
+    # Work out the two k-point grid sizes
+    # needed to determine the most sensible
+    # double-delta smearing parameter.
+    kpq = parameters["kpts_per_qpt"]
+    if kpq < 2: kpq = 2
+    
+    kpqs = {
+        "aux_kpts"     : kpq-1, # Do the smaller kpoint grid first
+        "primary_kpts" : kpq,   # Then the normal kpoint grid
+    }
 
-    # We're gonna need the Eliashberg function
-    # from the next scf calculation 
-    parameters["la2F"] = True
+    # Save working directory
+    base_wd = os.getcwd()
 
-    # Run the succesion of neccasary calculations
-    scf(parameters).run()
-    electron_phonon_grid(parameters).run()
-    q2r(parameters).run()
-    interpolate_phonon(parameters).run()
+    # Run an electron-phonon coulping calculation
+    # for each of the kpoint grid sizes
+    for dirname in kpqs:
+
+        try:
+            # Go into a directory for this kpoint grid
+            os.system("mkdir "+dirname)
+            os.chdir(dirname)
+
+            # Setup the kpoint grid for this directory
+            parameters["kpts_per_qpt"] = kpqs[dirname]
+
+            # relax the structure
+            parameters["la2F"] = False # We don't need the a2F flag for the relaxation
+            res = relax(parameters).run()
+            parameters["atoms"]   = res["relaxed atoms"]
+            parameters["lattice"] = res["relaxed lattice"]
+
+            # We're gonna need the Eliashberg function from now on
+            parameters["la2F"] = True
+
+            # Run the succesion of neccasary calculations
+            scf(parameters).run()
+            electron_phonon_grid(parameters).run()
+            q2r(parameters).run()
+            interpolate_phonon(parameters).run()
+
+        except Exception as e:
+
+            # Return to the base directory
+            os.chdir(base_wd)
+            raise e
+    
+        # Go back to the base directory
+        os.chdir(base_wd)

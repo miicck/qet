@@ -12,11 +12,17 @@ def test_tc_calculator():
     os.chdir("lah10_fm3m_tc_test")
 
     # Use cheapish parameters
-    lah10_fm3m["kpts_per_qpt"] = 3
-    lah10_fm3m["ecutwfc"]      = 40
+    lah10_fm3m["qpoint_spacing"] = 0.15
+    lah10_fm3m["kpts_per_qpt"]   = 6
+    lah10_fm3m["ecutwfc"]        = 40
 
-    try: calculate_tc(lah10_fm3m)
-    except: pass
+    try: 
+        calculate_tc(lah10_fm3m)
+
+    except Exception as e: 
+        # Restore old directory
+        os.chdir(old_path)
+        raise e
 
     # Restore old directory
     os.chdir(old_path)

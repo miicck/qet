@@ -143,5 +143,5 @@ def plot_tc_vs_smearing(directory="./"):
         plt.xlabel("Smearing width $\\sigma$ (Ry)")
 
     plt.fill_between(ns, tc1, tc2, alpha=0.5)
-    plt.ylabel("$T_C$ (allen-dynes with $\\mu^* \\in [0.1, 0.15]$)")
+    plt.ylabel("$T_C$ (Allen-Dynes with $\\mu^* \\in \; [0.1, 0.15]$)")
     plt.show()
