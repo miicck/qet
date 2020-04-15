@@ -98,50 +98,54 @@ def plot_a2f(filename="./a2F.dos1"):
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
 
-def plot_tc_vs_smearing(directory="./"):
+def plot_tc_vs_smearing(directories=["./"]):
     from qet.calculations import tc_from_a2f_allen_dynes
 
-    tcs1 = []
-    tcs2 = []
 
-    # Loop over a2f.dos files
-    for f in os.listdir(directory):
-        if not "a2F.dos" in f: continue
-        f = directory+"/"+f 
+    for directory in directories:
+        tcs1 = []
+        tcs2 = []
 
-        try:
-            # Get tc for two different mu* values
-            tcs        = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
-            n          = int(f.split("a2F.dos")[-1])
-            tcs1.append([n, tcs[0.1]])
-            tcs2.append([n, tcs[0.15]])
+        # Loop over a2f.dos files
+        for f in os.listdir(directory):
+            if not "a2F.dos" in f: continue
+            f = directory+"/"+f 
 
-        except: continue
+            try:
+                # Get tc for two different mu* values
+                tcs        = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
+                n          = int(f.split("a2F.dos")[-1])
+                tcs1.append([n, tcs[0.1]])
+                tcs2.append([n, tcs[0.15]])
 
-    tcs1.sort()
-    tcs2.sort()
+            except: continue
 
-    ns, tc1 = zip(*tcs1)
-    ns, tc2 = zip(*tcs2)
+        tcs1.sort()
+        tcs2.sort()
 
-    # Attempt to find el_ph_sigma in .in files
-    el_ph_sigma = None
-    for f in os.listdir(directory):
-        if not f.endswith(".in"): continue
-        f = directory+"/"+f
+        ns, tc1 = zip(*tcs1)
+        ns, tc2 = zip(*tcs2)
 
-        with open(f) as of:
-            for line in of:
-                if "el_ph_sigma" in line:
-                    el_ph_sigma = float(line.split("=")[-1].replace(",",""))
-                    break
+        # Attempt to find el_ph_sigma in .in files
+        el_ph_sigma = None
+        for f in os.listdir(directory):
+            if not f.endswith(".in"): continue
+            f = directory+"/"+f
 
-    if el_ph_sigma is None: 
-        plt.xlabel("Smearing number")
-    else:
-        ns = [el_ph_sigma*n for n in ns]
-        plt.xlabel("Smearing width $\\sigma$ (Ry)")
+            with open(f) as of:
+                for line in of:
+                    if "el_ph_sigma" in line:
+                        el_ph_sigma = float(line.split("=")[-1].replace(",",""))
+                        break
 
-    plt.fill_between(ns, tc1, tc2, alpha=0.5)
+        if el_ph_sigma is None: 
+            plt.xlabel("Smearing number")
+        else:
+            ns = [el_ph_sigma*n for n in ns]
+            plt.xlabel("Smearing width $\\sigma$ (Ry)")
+        plt.fill_between(ns, tc1, tc2, alpha=0.5, label=directory)
+
+
     plt.ylabel("$T_C$ (Allen-Dynes with $\\mu^* \\in \; [0.1, 0.15]$)")
+    plt.legend()
     plt.show()

@@ -26,6 +26,7 @@ class parameters:
         self["occupations"]      = "smearing"        # treat as metallic
         self["degauss"]          = 0.02              # metal smearing width (Ry)
         self["qpoint_spacing"]   = 0.1               # qpoint spacing (2pi A^-1)
+        self["force_cube_grids"] = False             # true if grids must be of form NxNxN
         self["kpts_per_qpt"]     = 6                 # ratio of kpt to qpt grid
         self["ldisp"]            = True              # use a grid of q-points
         self["reduce_io"]        = True              # reduce io to a strict minimum
@@ -129,7 +130,9 @@ class parameters:
             rlat = np.linalg.inv(self["lattice"]).T
             qps  = float(self["qpoint_spacing"])
             b2q  = lambda b : int(np.linalg.norm(b)/qps)
-            return [b2q(b) for b in rlat]
+            grid = [b2q(b) for b in rlat]
+            if self["force_cube_grids"]: grid = [max(grid) for g in grid]
+            return grid
 
         # Get individual components of qpoint grid
         if key == "nq1": return self["qpoint_grid"][0]
@@ -190,6 +193,11 @@ class parameters:
     def validate_and_standardise_param(self, key, value):
 
         if key == "atoms":
+
+            # Ensure atom symbols start with a capital letter
+            for i in range(0, len(value)):
+                value[i][0] = value[i][0].capitalize()
+
             # Sort atoms in decreasing atomic number
             value.sort(key = lambda a : -elements[a[0]]["atomic number"])
 
@@ -411,3 +419,34 @@ class parameters:
                 raise ValueError(exept.format(lines[i]))
 
             self[spl[0]] = spl[1]
+
+    # Load from a CASTEP .cell file
+    def load_from_cell(self, filename):
+        
+        lattice = []
+        atoms   = []
+
+        i_done = []
+        with open(filename) as f:
+            lines = [l.strip().lower() for l in f.read().split("\n")]
+            for i, line in enumerate(lines):
+                if i in i_done: continue
+
+                if "endblock" in line: 
+                    continue
+
+                if "lattice_cart" in line:
+                    offset = 1 if "ang" in lines[i+1] else 0
+                    for j in range(i+1+offset, i+4+offset):
+                        lattice.append(float(w) for w in lines[j].split())
+                        i_done.append(j)
+
+                if "positions_frac" in line:
+                    for j in range(i+1, len(lines)):
+                        i_done.append(j)
+                        jline = lines[j]
+                        if "endblock" in jline: break
+                        atoms.append([jline.split()[0], [float(w) for w in jline.split()[1:4]]])
+
+        self["lattice"] = lattice
+        self["atoms"]   = atoms
