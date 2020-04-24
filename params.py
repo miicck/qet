@@ -194,9 +194,10 @@ class parameters:
 
         if key == "atoms":
 
-            # Ensure atom symbols start with a capital letter
+            # Ensure atom symbols start with a capital letter and don't
+            # contain whitespace
             for i in range(0, len(value)):
-                value[i][0] = value[i][0].capitalize()
+                value[i][0] = value[i][0].strip().capitalize()
 
             # Sort atoms in decreasing atomic number
             value.sort(key = lambda a : -elements[a[0]]["atomic number"])

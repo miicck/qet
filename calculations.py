@@ -307,6 +307,7 @@ class phonon_grid(calculation):
         s += self.in_params.to_input_line("nq1")
         s += self.in_params.to_input_line("nq2")
         s += self.in_params.to_input_line("nq3")
+        s += self.in_params.to_input_line("search_sym")
         if recover: s += "    recover = .true.,\n"
         s += "/\n"
 
@@ -346,6 +347,7 @@ class electron_phonon_grid(calculation):
         s += self.in_params.to_input_line("nq3")
         s += self.in_params.to_input_line("el_ph_sigma")
         s += self.in_params.to_input_line("el_ph_nsigma")
+        s += self.in_params.to_input_line("search_sym")
         if recover: s += "    recover = .true.,\n"
         s += "/\n"
 
@@ -423,9 +425,9 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
     import numpy         as     np
     from   qet.constants import RY_TO_K
 
-    # Parse the a2f file, ignore negative frequencies
+    # Parse the a2f file, ignore negative frequencies/elishberg function
     out = parser.a2f_dos_out(filename)
-    wa  = [[w,a] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
+    wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
     ws  = [w for w,a in wa]
 
     # Use the allen-dynes equation to estimate Tc
@@ -442,6 +444,107 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
         tc_ad[mu] = RY_TO_K*f1*f2*(wlog/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
 
     return tc_ad
+
+# Calculate TC by solving the eliashberg equations (requires elk)
+def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15]):
+    import warnings
+    import numpy          as     np
+    from   scipy.optimize import curve_fit
+    from   subprocess     import check_output
+
+    # raise warnings as exceptions
+    warnings.filterwarnings("error") 
+
+    # First, estimate Tc using the allen-dynes equation
+    tc_ad = tc_from_a2f_allen_dynes(filename, mu_stars=mu_stars)
+    
+    # Find the elk species directory
+    elk_base_dir = check_output(["which", "elk"])
+    elk_base_dir = elk_base_dir.decode("utf-8").replace("src/elk\n","")
+    species_dir  = elk_base_dir + "/species/"
+
+    # Parse a2F(w), ignoring negative w and negative a2F
+    out = parser.a2f_dos_out(filename)
+    wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
+    ws  = [w for w,a in wa]
+
+    # Get the smearing number, make a corresponding tc directory
+    dosn = filename.split("dos")[-1]
+    tc_dir = os.path.dirname(filename) + "/tc_dos_" + dosn
+    os.system("mkdir "+tc_dir)
+
+    for mu in mu_stars:
+
+        # Create the directory for this value of mu
+        mu_dir = tc_dir + "/mu_{0}".format(mu)
+        os.system("mkdir "+mu_dir)
+
+        # Create elk a2F input file
+        with open(mu_dir+"/ALPHA2F.OUT", "w") as f:
+            for w, a in wa:
+                w *= 0.5 # Convert Ry to Ha
+                f.write("{0} {1}\n".format(w,a))
+
+        # Create elk input file
+        # A lot of the parameters are not actually needed
+        # but are neccassary to allow elk to start up
+        with open(mu_dir+"/elk.in", "w") as f:
+            f.write("tasks\n260\n\nntemp\n20\nmustar\n{0}\n".format(mu))
+            f.write("\nwplot\n{0} {1} {2}\n-0.5 0.5\n".format(len(wa), 1, 1))
+            f.write("sppath\n'{0}'\n".format(species_dir))
+            f.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
+            f.write("avec\n1 0 0\n0 1 0\n0 0 1")
+
+        # Run elk
+        os.system("cd {0}; elk > /dev/null".format(mu_dir))
+
+        # Parse the superconducting gap vs temperature
+        ts = []
+        gs = []
+        with open(mu_dir+"/ELIASHBERG_GAP_T.OUT") as f:
+            for l in f:
+                vals = [float(w) for w in l.split()]
+                if len(vals) != 3: continue
+                ts.append(vals[0])
+                gs.append(vals[1]/vals[2])
+
+        # Guess tc from where gap first goes above
+        # 5% of the maximum on decreasing Tc
+        tc_guess = 0
+        for i in range(len(ts)-1, -1, -1):
+            tc_guess = ts[i]
+            if gs[i] > 0.05 * max(gs): break
+
+        def gap_model(t, tc, gmax):
+            t = np.array([min(ti, tc) for ti in t])
+            return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
+
+        try:
+            p0 = [tc_guess, max(gs)]
+            par, cov = curve_fit(gap_model, ts, gs, p0)
+        except Warning as warn:
+            log("Gap function fit failed with warning:", "tc.log")
+            log(str(warn), "tc.log")
+            par = [0, p0[1]]
+            cov = float("inf")
+        except Exception as err:
+            log("Gap function fit failed with error:", "tc.log")
+            log(str(err), "tc.log")
+            raise err
+
+        if np.isfinite(cov).all():
+            tc  = par[0]
+            err = cov[0][0]**0.5
+        else:
+            log("Tc covariance is infinite!", "tc.log")
+            tc  = tc_guess
+            err = float("inf")
+
+        # Save the result
+        with open(mu_dir+"/tc.out", "w") as f:
+            f.write("{0} +/- {1} K (Eliashberg)\n".format(tc, err))
+            f.write("{0} K (Allen-Dynes)\n".format(tc_ad[mu]))
+            
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set

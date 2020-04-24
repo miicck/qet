@@ -120,6 +120,9 @@ def plot_tc_vs_smearing(directories=["./"]):
 
             except: continue
 
+        if len(tcs1) == 0 or len(tcs2) == 0:
+            continue
+
         tcs1.sort()
         tcs2.sort()
 
@@ -148,4 +151,36 @@ def plot_tc_vs_smearing(directories=["./"]):
 
     plt.ylabel("$T_C$ (Allen-Dynes with $\\mu^* \\in \; [0.1, 0.15]$)")
     plt.legend()
+
+    if plt.ylim()[1] > 500.0:
+        print("Found T_C > 500 K, rescaling axis")
+        plt.ylim([0, 500.0])
+
     plt.show()
+
+def plot_alch_network(directory=None):
+    from qet.alchemy.network import plot_alch_network
+    plot_alch_network(directory=directory, pickle=False)
+
+# Run like a program
+def main():
+    import sys
+
+    # The possible tasks to invoke
+    invoke_list = {
+        "tc_vs_smearing" : lambda : plot_tc_vs_smearing(sys.argv[2:]),
+        "alch_network"   : lambda : plot_alch_network(sys.argv[2]),
+    }
+
+    # Check arguments
+    if len(sys.argv) < 2 or not sys.argv[1] in invoke_list:
+        print("The first argument to plots.py should be one of:")
+        for i in invoke_list:
+            print("    "+i)
+        return
+
+    invoke_list[sys.argv[1]]()
+
+# Check if we are directly invoking this script, if so
+# run plots.py as a program
+if __name__ == "__main__": main()

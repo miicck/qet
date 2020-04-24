@@ -53,18 +53,25 @@ def minus_h_dos(structure):
 
     return -hydrogen_dos/total_dos
 
-def maximize_hdos(muts):
+def maximize_hdos(muts, init_structures=None):
 
     # Load/create the network
     nw = alch_network("network")
 
     # Add the seed structures
-    for structure in get_initial_ternaries():
+    if init_structures is None: init_structures = get_initial_ternaries()
+    for structure in init_structures:
         nw.create_vertex(structure)
 
     # Optimize the network
     for n in range(0, 100):
         nw.expand_to_minimize(minus_h_dos, muts, is_valid=is_valid)
+
+def fd3m_search():
+    
+    # General search around the Fd3m structure
+    init = get_initial_ternaries()
+    maximize_hdos(mutations.all_mutations, init_structures = [init[0]])
 
 def general_search():
 
