@@ -446,11 +446,19 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
     return tc_ad
 
 # Calculate TC by solving the eliashberg equations (requires elk)
-def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15]):
+def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
     import warnings
     import numpy          as     np
     from   scipy.optimize import curve_fit
     from   subprocess     import check_output
+
+    # Get the smearing number, make a corresponding tc directory
+    dosn = filename.split("dos")[-1]
+    tc_dir = os.path.dirname(filename) + "/tc_dos_" + dosn
+    if os.path.isdir(tc_dir):
+        if force: os.system("rm -r "+tc_dir)
+        return
+    os.system("mkdir "+tc_dir)
 
     # raise warnings as exceptions
     warnings.filterwarnings("error") 
@@ -467,11 +475,6 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15]):
     out = parser.a2f_dos_out(filename)
     wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
     ws  = [w for w,a in wa]
-
-    # Get the smearing number, make a corresponding tc directory
-    dosn = filename.split("dos")[-1]
-    tc_dir = os.path.dirname(filename) + "/tc_dos_" + dosn
-    os.system("mkdir "+tc_dir)
 
     for mu in mu_stars:
 
@@ -544,7 +547,22 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15]):
         with open(mu_dir+"/tc.out", "w") as f:
             f.write("{0} +/- {1} K (Eliashberg)\n".format(tc, err))
             f.write("{0} K (Allen-Dynes)\n".format(tc_ad[mu]))
-            
+
+# Traverse all subdirectories, calculating Tc for every
+# a2F.dos file we find
+def tc_from_a2f_eliashberg_recursive(root_dir):
+
+    # List all files in the given folder or subdirectory
+    def listfiles(folder):
+        for root, folders, files in os.walk(folder):
+            for filename in folders + files:
+                yield os.path.join(root, filename)
+
+    # Run over all a2F.dos files and calculate Tc
+    for f in listfiles(root_dir):
+        if not "a2F.dos" in f: continue
+        try: tc_from_a2f_eliashberg(f)
+        except: pass
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set

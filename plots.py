@@ -98,27 +98,48 @@ def plot_a2f(filename="./a2F.dos1"):
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
 
-def plot_tc_vs_smearing(directories=["./"]):
+def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
-
     for directory in directories:
+
         tcs1 = []
         tcs2 = []
+
+        method = "Allen-Dynes"
 
         # Loop over a2f.dos files
         for f in os.listdir(directory):
             if not "a2F.dos" in f: continue
             f = directory+"/"+f 
+            n = int(f.split("a2F.dos")[-1])
 
-            try:
-                # Get tc for two different mu* values
-                tcs        = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
-                n          = int(f.split("a2F.dos")[-1])
-                tcs1.append([n, tcs[0.1]])
-                tcs2.append([n, tcs[0.15]])
+            # Attempt to read Tc from elk directory
+            elk_dir = directory + "/tc_dos_{0}".format(n)
+            if os.path.isdir(elk_dir) and not force_allen_dynes:
 
-            except: continue
+                method = "Eliashberg"
+                for mu_dir in os.listdir(elk_dir):
+                    mu_dir = elk_dir + "/" + mu_dir
+                    tc_f   = mu_dir + "/tc.out"
+                    if not os.path.isfile(tc_f): continue
+                    
+                    with open(tc_f) as f:
+                        for line in f:
+                            if "liashberg" in line:
+                                tc = float(line.split()[0])
+                                if len(tcs1) == len(tcs2): tcs1.append([n, tc])
+                                else: tcs2.append([n, tc])
+
+            # No elk directory, calculate using allen-dynes
+            else:
+                if method != "Allen-Dynes": method = "Mixed"
+                try:
+                    # Get tc for two different mu* values
+                    tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
+                    tcs1.append([n, tcs[0.1]])
+                    tcs2.append([n, tcs[0.15]])
+                except: continue
 
         if len(tcs1) == 0 or len(tcs2) == 0:
             continue
@@ -149,7 +170,7 @@ def plot_tc_vs_smearing(directories=["./"]):
         plt.fill_between(ns, tc1, tc2, alpha=0.5, label=directory)
 
 
-    plt.ylabel("$T_C$ (Allen-Dynes with $\\mu^* \\in \; [0.1, 0.15]$)")
+    plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
     plt.legend()
 
     if plt.ylim()[1] > 500.0:
@@ -168,8 +189,9 @@ def main():
 
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing" : lambda : plot_tc_vs_smearing(sys.argv[2:]),
-        "alch_network"   : lambda : plot_alch_network(sys.argv[2]),
+        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:]),
+        "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True),
+        "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
     }
 
     # Check arguments
