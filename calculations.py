@@ -91,10 +91,40 @@ def pw_control_input(params, calculation="scf", recover=False):
 # Returns True if the given file is a completed
 # quantum espresso output
 def is_complete(filename):
+
+    # Doesn't exist => not complete
     if not os.path.isfile(filename):
         return False
+
+    # Crash => not complete
+    if os.path.isfile(os.path.dirname(filename)+"/CRASH"):
+        return False
+
+    # JOB DONE => complete
     with open(filename) as f:
-        return "JOB DONE" in f.read()
+        for line in f:
+            if "JOB DONE" in line:
+                return True
+
+    # Now we're in a bit of a grey area
+    # sometimes, QE doesn't print JOB DONE
+    # when a job finishes, but the job
+    # might also have timed out, thus not
+    # being complete, but not creating a
+    # CRASH file either. I treat this on a
+    # case-by-case basis.
+
+    last_line = None
+    with open(filename) as f:
+        for line in f:
+            last_line = line
+
+    # This sometimes happens if a phonon calculation has
+    # finished, but had no q-points to calculate?
+    if "re-writing distributed wavefunctions" in last_line:
+        return True
+
+    return False
 
 ##################
 #  CALCULATIONS  #
@@ -457,7 +487,26 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
     tc_dir = os.path.dirname(filename) + "/tc_dos_" + dosn
     if os.path.isdir(tc_dir):
         if force: os.system("rm -r "+tc_dir)
-        return
+        else:
+            # Attempt to parse tc from file
+            tc_eliashberg = {}
+
+            # Loop over calculated mu* values
+            for mu_dir in os.listdir(tc_dir):
+                mu_dir = tc_dir + "/" + mu_dir
+                if not os.path.isdir(mu_dir): continue
+                mu = float(mu_dir.split("/")[-1].split("_")[1])
+
+                # Parse the tc.out file for the eliashberg Tc
+                if not os.path.isfile(mu_dir + "/tc.out"): continue
+                with open(mu_dir + "/tc.out") as f:
+                    for line in f:
+                        if "liashberg" in line:
+                            tc_eliashberg[mu] = float(line.split()[0])
+                            break
+
+            return tc_eliashberg
+
     os.system("mkdir "+tc_dir)
 
     # raise warnings as exceptions
@@ -476,6 +525,7 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
     wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
     ws  = [w for w,a in wa]
 
+    tc_eliashberg = {}
     for mu in mu_stars:
 
         # Create the directory for this value of mu
@@ -543,10 +593,14 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
             tc  = tc_guess
             err = float("inf")
 
+        tc_eliashberg[mu] = tc
+
         # Save the result
         with open(mu_dir+"/tc.out", "w") as f:
             f.write("{0} +/- {1} K (Eliashberg)\n".format(tc, err))
             f.write("{0} K (Allen-Dynes)\n".format(tc_ad[mu]))
+
+    return tc_eliashberg
 
 # Traverse all subdirectories, calculating Tc for every
 # a2F.dos file we find
@@ -561,8 +615,15 @@ def tc_from_a2f_eliashberg_recursive(root_dir):
     # Run over all a2F.dos files and calculate Tc
     for f in listfiles(root_dir):
         if not "a2F.dos" in f: continue
-        try: tc_from_a2f_eliashberg(f)
-        except: pass
+        log("Calculating Tc for "+f, "tc.log")
+        try: 
+            tc_res = tc_from_a2f_eliashberg(f)
+            log("Success", "tc.log")
+            for mu in tc_res:
+                log("    Mu = {0}, Tc = {1}".format(mu, tc_res[mu]), "tc.log")
+        except Exception as e: 
+            log("Failed with excpetion:\n"+str(e), "tc.log")
+            pass
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
