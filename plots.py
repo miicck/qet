@@ -173,9 +173,9 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
     plt.legend()
 
-    if plt.ylim()[1] > 500.0:
-        print("Found T_C > 500 K, rescaling axis")
-        plt.ylim([0, 500.0])
+    if plt.ylim()[1] > 1000.0:
+        print("Found T_C > 1000 K, rescaling axis")
+        plt.ylim([0, 1000.0])
 
     plt.show()
 

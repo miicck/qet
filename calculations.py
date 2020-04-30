@@ -602,15 +602,15 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
 
     return tc_eliashberg
 
+# List all files in the given folder or subdirectories of it
+def listfiles(folder):
+    for root, folders, files in os.walk(folder):
+        for filename in folders + files:
+            yield os.path.join(root, filename)
+
 # Traverse all subdirectories, calculating Tc for every
 # a2F.dos file we find
 def tc_from_a2f_eliashberg_recursive(root_dir):
-
-    # List all files in the given folder or subdirectory
-    def listfiles(folder):
-        for root, folders, files in os.walk(folder):
-            for filename in folders + files:
-                yield os.path.join(root, filename)
 
     # Run over all a2F.dos files and calculate Tc
     for f in listfiles(root_dir):
@@ -678,3 +678,51 @@ def calculate_tc(parameters):
     
         # Go back to the base directory
         os.chdir(base_wd)
+
+# Recursively searches for files no longer needed
+# by Tc calculations from calculate_tc() and deletes them
+def tidy_tc_calculations(base_dir="."):
+
+    # Find all subdirectories with an elph.in file
+    for elph_in in listfiles(base_dir):
+        if not elph_in.endswith("elph.in"): continue
+        tc_dir = os.path.dirname(elph_in)
+
+        # Parse the number of sigma values
+        # fromthe .in file
+        n_sig = None
+        with open(elph_in) as f:
+            for line in f:
+                if "el_ph_nsigma" in line:
+                    n_sig = int(line.split("=")[-1].replace(",",""))
+
+        if n_sig is None:
+            log("Could not parse el_ph_nsigma from "+elph_in, "tidy_tc.log")
+            continue
+
+        # If there are less than that many a2F files, it's not safe to delete stuff
+        all_exist = True
+        for i in range(1, n_sig+1):
+            if not os.path.isfile(tc_dir + "/a2F.dos{0}".format(i)):
+                all_exist = False
+                break
+        if not all_exist:
+            log("Not removing unfinshed calculations in "+tc_dir, "tidy_tc.log")
+            continue
+
+        # Find big files
+        to_remove = []
+        for f in os.listdir(tc_dir):
+            if f.startswith("pwscf.wfc"):
+                to_remove.append(tc_dir+"/"+f)
+
+        to_remove.append(tc_dir+"/elph_dir")
+        to_remove.append(tc_dir+"/_ph0")
+        to_remove.append(tc_dir+"/pwscf.save")
+
+        # Remove the big stuff
+        for f in to_remove:
+            log("Removing {0}".format(f), "tidy_tc.log")
+            if os.path.isfile(f): os.system("rm "+f)
+            elif os.path.isdir(f): os.system("rm -r "+f)
+            else: log("could not find the above", "tidy_tc.log")
