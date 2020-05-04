@@ -5,6 +5,8 @@ from   qet.type_tools import str_to_type
 from   qet.elements   import elements
 from   collections    import defaultdict
 
+# This is thrown when a REQUIRED parameter
+# could not be found or generated.
 class ParamNotFound(Exception):
     pass
 
@@ -191,9 +193,11 @@ class parameters:
                 msg = "Could not generate k-point grid from parameter set."
                 raise ParamNotFound(msg)
 
-        # Could not generate, error out
+        # This wasn't one of the generatable objects, treat
+        # this as a KeyError, so we use the QE default value
+        # (if there is one)
         exept = "Key \"{0}\" cold not be generated in parameters object."
-        raise ParamNotFound(exept.format(key))
+        raise KeyError(exept.format(key))
             
 
     # Get parameter values with []
@@ -243,10 +247,10 @@ class parameters:
         # so the QE default value will be used
         try:
             val = self[key]
-        except Exception as e:
-            if e is ParamNotFound:
-                raise e
-            return ""
+        except ParamNotFound as pnf:
+            raise pnf # Something actually went wrong
+        except KeyError as e:
+            return "" # The key wasn't present, use the default
 
         # Allow name different from key
         if not name is None: key = name
