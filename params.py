@@ -5,6 +5,9 @@ from   qet.type_tools import str_to_type
 from   qet.elements   import elements
 from   collections    import defaultdict
 
+class ParamNotFound(Exception):
+    pass
+
 # A parameters object contains the specification
 # for the current calculation, including both the
 # parameters for the DFT code as well as the 
@@ -40,6 +43,7 @@ class parameters:
         self["ph_interp_amt"]    = 8                 # phonon interpolation grid size (as multiple of qpoint_grid)
         self["ndos"]             = 200               # number of energy steps to use when interpolating DOS
         self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
+        self["pseudo_dirs"]      = []                # directories to search for pseudopotentials
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -51,15 +55,14 @@ class parameters:
         except ImportError:
             self["cores_per_node"] = 1
 
-        # Default the pseudopotential directory to
-        # $PSEUDO_DIR if it is defined, or
-        # home/pseudopotentials if $HOME is defined
-        # otherwise set to "./"
-        self["pseudo_dir"] = "./"
+        # Add HOME/pseudopotentials and PSEUDO_DIR to the
+        # pseudopotential directories to search, if they exist
         if "HOME" in os.environ:
-            self["pseudo_dir"] = os.environ["HOME"]+"/pseudopotentials"
+            pd = os.environ["HOME"]+"/pseudopotentials"
+            if not pd in self["pseudo_dirs"]: self["pseudo_dirs"].append(pd)
         if "PSEUDO_DIR" in os.environ:
-            self["pseudo_dir"] = os.environ["PSEUDO_DIR"]
+            pd = os.environ["PSEUDO_DIR"]
+            if not pd in self["pseudo_dirs"]: self["pseudo_dirs"].append(pd)
 
         if not filename is None:
             self.load(filename)
@@ -92,6 +95,21 @@ class parameters:
                 spec[i] = [s, elements[s]["mass number"], s+".UPF"]
 
             return spec
+
+        # Find the pseudo_dir that contains
+        # all of the needed pseudopotentials
+        if key == "pseudo_dir":
+            for pd in self["pseudo_dirs"]:
+                if not os.path.isdir(pd): continue
+
+                found = True
+                for s, m, p in self["species"]:
+                    if p not in os.listdir(pd):
+                        found = False
+                        break
+
+                if found: return pd
+            raise ParamNotFound("Pseudopotential not found")
 
         # Get a dictionary of the form atom name : count
         if key == "atom_counts":
@@ -171,11 +189,11 @@ class parameters:
             else:
 
                 msg = "Could not generate k-point grid from parameter set."
-                raise RuntimeError(msg)
+                raise ParamNotFound(msg)
 
         # Could not generate, error out
         exept = "Key \"{0}\" cold not be generated in parameters object."
-        raise ValueError(exept.format(key))
+        raise ParamNotFound(exept.format(key))
             
 
     # Get parameter values with []
@@ -225,7 +243,9 @@ class parameters:
         # so the QE default value will be used
         try:
             val = self[key]
-        except:
+        except Exception as e:
+            if e is ParamNotFound:
+                raise e
             return ""
 
         # Allow name different from key
@@ -355,6 +375,24 @@ class parameters:
 
         return i_dealt_with
 
+    # Parse pseudo
+    def parse_pseudo_dirs(self, lines):
+        
+        i_dealt_with = []
+        for i, line in enumerate(lines):
+            
+            # Only parse pseudo_dir lines
+            if not line.startswith("pseudo_dir"):
+                continue
+
+            pd = line.split()[1]
+            if not pd in self["pseudo_dirs"]:
+                self["pseudo_dirs"].append(pd)
+
+            i_dealt_with.append(i)
+
+        return i_dealt_with
+
     # Save parameter set to file
     def save(self, filename):
 
@@ -374,10 +412,17 @@ class parameters:
                 f.write("{0} {1} {2} {3}\n".format(a[0], *a[1]))
             f.write("\n")
 
+            # Write pseudo_dirs
+            pseudo_dirs = self["pseudo_dirs"]
+            for pd in pseudo_dirs:
+                f.write("pseudo_dir {0}\n".format(pd))
+            f.write("\n")
+
             # Write other parameters
             for p in self.par:
-                if p == "atoms":   continue
-                if p == "lattice": continue
+                if p == "atoms":       continue
+                if p == "lattice":     continue
+                if p == "pseudo_dirs": continue
 
                 f.write("{0} {1}\n".format(p, self.par[p]))
 
@@ -404,6 +449,7 @@ class parameters:
         i_dealt_with = []
         i_dealt_with.extend(self.parse_lattice(lines))
         i_dealt_with.extend(self.parse_atoms(lines))
+        i_dealt_with.extend(self.parse_pseudo_dirs(lines))
 
         # Assume the rest is simple key value form
         for i in range(0, len(lines)):
