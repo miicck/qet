@@ -1,6 +1,6 @@
 import os, numbers, copy
 import numpy          as     np
-from   qet.constants  import BOHR_TO_ANGSTROM
+from   qet.constants  import BOHR_TO_ANGSTROM, ANGSTROM_TO_BOHR
 from   qet.type_tools import str_to_type 
 from   qet.elements   import elements
 from   collections    import defaultdict
@@ -357,7 +357,7 @@ class parameters:
             elif units == "angstrom":
                 linv = np.linalg.inv(self["lattice"].T)
             elif units == "bohr":
-                linv = la.inv(ANGSTROM_TO_BOHR*self["lattice"].T)
+                linv = np.linalg.inv(ANGSTROM_TO_BOHR*self["lattice"].T)
             else:
                 raise ValueError("Unknown atom coordinate units: "+units)
 

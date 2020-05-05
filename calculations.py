@@ -45,7 +45,7 @@ def input_geometry(params):
 
 # Get the control part of a pw.x input file
 def pw_control_input(params, calculation="scf", recover=False):
-    
+
     # Control namelist
     s  = "&CONTROL\n"
     s += "    calculation = '{0}',\n".format(calculation)
