@@ -101,17 +101,56 @@ class parameters:
         # Find the pseudo_dir that contains
         # all of the needed pseudopotentials
         if key == "pseudo_dir":
-            for pd in self["pseudo_dirs"]:
-                if not os.path.isdir(pd): continue
 
-                found = True
-                for s, m, p in self["species"]:
-                    if p not in os.listdir(pd):
-                        found = False
+            # Work out which pseudo_dirs contain
+            # which pseudopotentials
+            found_in = {}
+            for s, m, p in self["species"]:
+                found_in[p] = []
+                for pd in self["pseudo_dirs"]:
+                    if not os.path.isdir(pd): continue
+                    if p in os.listdir(pd):
+                        found_in[p].append(pd)
+
+            # See if any one pseudo_dir contains
+            # all of the needed pseudods
+            for pd in self["pseudo_dirs"]:
+
+                has_all = True
+                for p in found_in:
+                    if not pd in found_in[p]:
+                        has_all = False
                         break
 
-                if found: return pd
-            raise ParamNotFound("Pseudopotential not found")
+                # This pseudo_dir contains all the
+                # needed pseudos, go ahead and use it
+                if has_all: return pd
+
+            # See if we can combine pseudos from
+            # multiple directories
+            for p in found_in:
+
+                if len(found_in[p]) == 0:
+                    err = "Could not find the pseudopotentail "
+                    err += p + " in any of:"
+                    for pd in self["pseudo_dirs"]:
+                        err += "\n"+pd
+                    raise ParamNotFound(err)
+
+            # Create a file with the pseudopotential origin locations
+            pof = open("pseudopotential_origin", "w")
+             
+            # We have found all the pseudos, collect
+            # them into the working directory
+            for p in found_in:
+
+                # Copy the fist found pseudo to
+                # working directory
+                os.system("cp "+found_in[p][0]+"/"+p+" .")
+                pof.write(p+" from "+found_in[p][0]+"\n")
+
+            pof.close()
+            return "./"
 
         # Get a dictionary of the form atom name : count
         if key == "atom_counts":
