@@ -101,6 +101,16 @@ def plot_a2f(filename="./a2F.dos1"):
 def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
+    # Ensure primrary grids are treated first
+    def sort_key(d):
+        if "primary" in d: return "0"
+        return d
+    directories.sort(key=sort_key)
+
+    tc_offset = None
+    ax_normal = plt.subplot(221)
+    ax_offset = plt.subplot(222)
+
     for directory in directories:
 
         tcs1 = []
@@ -167,15 +177,26 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
         else:
             ns = [el_ph_sigma*n for n in ns]
             plt.xlabel("Smearing width $\\sigma$ (Ry)")
-        plt.fill_between(ns, tc1, tc2, alpha=0.5, label=directory)
+
+        ax_normal.fill_between(ns, tc1, tc2, alpha=0.5, label=directory) 
+
+        if tc_offset is None: 
+            tc_offset = tc1[-1]
+        else:
+            dt = tc1[-1] - tc_offset
+            tc1 = [t-dt for t in tc1]
+            tc2 = [t-dt for t in tc2]
+
+        ax_offset.fill_between(ns, tc1, tc2, alpha=0.5, label=directory)
 
 
-    plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
-    plt.legend()
+    for ax in [ax_offset, ax_normal]:
+        ax.set_ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
+        ax.legend()
 
-    if plt.ylim()[1] > 1000.0:
-        print("Found T_C > 1000 K, rescaling axis")
-        plt.ylim([0, 1000.0])
+        if ax.get_ylim()[1] > 1000.0:
+            print("Found T_C > 1000 K, rescaling axis")
+            ax.set_ylim([0, 1000.0])
 
     plt.show()
 
