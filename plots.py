@@ -213,6 +213,7 @@ def main():
         "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:]),
         "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
+        "a2f"               : lambda : plot_a2f(sys.argv[2]),
     }
 
     # Check arguments
