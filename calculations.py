@@ -668,6 +668,9 @@ def calculate_tc(parameters):
             parameters["atoms"]   = res["relaxed atoms"]
             parameters["lattice"] = res["relaxed lattice"]
 
+            # Calculate the projected density of states
+            proj_dos(parameters).run()
+
             # We're gonna need the Eliashberg function from now on
             parameters["la2F"] = True
 
@@ -688,34 +691,37 @@ def calculate_tc(parameters):
 
 # Recursively searches for files no longer needed
 # by Tc calculations from calculate_tc() and deletes them
-def tidy_tc_calculations(base_dir="."):
+def tidy_tc_calculations(base_dir=".", remove_incomplete=False):
 
     # Find all subdirectories with an elph.in file
     for elph_in in listfiles(base_dir):
         if not elph_in.endswith("elph.in"): continue
         tc_dir = os.path.dirname(elph_in)
 
-        # Parse the number of sigma values
-        # fromthe .in file
-        n_sig = None
-        with open(elph_in) as f:
-            for line in f:
-                if "el_ph_nsigma" in line:
-                    n_sig = int(line.split("=")[-1].replace(",",""))
+        # Check calculations have completed
+        if not remove_incomplete:
+        
+            # Parse the number of sigma values
+            # fromthe .in file
+            n_sig = None
+            with open(elph_in) as f:
+                for line in f:
+                    if "el_ph_nsigma" in line:
+                        n_sig = int(line.split("=")[-1].replace(",",""))
 
-        if n_sig is None:
-            log("Could not parse el_ph_nsigma from "+elph_in, "tidy_tc.log")
-            continue
+            if n_sig is None:
+                log("Could not parse el_ph_nsigma from "+elph_in, "tidy_tc.log")
+                continue
 
-        # If there are less than that many a2F files, it's not safe to delete stuff
-        all_exist = True
-        for i in range(1, n_sig+1):
-            if not os.path.isfile(tc_dir + "/a2F.dos{0}".format(i)):
-                all_exist = False
-                break
-        if not all_exist:
-            log("Not removing unfinshed calculations in "+tc_dir, "tidy_tc.log")
-            continue
+            # If there are less than that many a2F files, it's not safe to delete stuff
+            all_exist = True
+            for i in range(1, n_sig+1):
+                if not os.path.isfile(tc_dir + "/a2F.dos{0}".format(i)):
+                    all_exist = False
+                    break
+            if not all_exist:
+                log("Not removing unfinshed calculations in "+tc_dir, "tidy_tc.log")
+                continue
 
         # Find big files
         to_remove = []
