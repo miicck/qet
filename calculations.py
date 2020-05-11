@@ -180,8 +180,16 @@ class calculation:
             np  = self.in_params["cores_per_node"]*self.in_params["nodes"]
             ppn = self.in_params["cores_per_node"]
             qe_flags = "-nk {0}".format(np) # Use k-point parallelism
-            cmd = "cd {0}; mpirun -ppn {1} -np {2} {3} {4} -i {5} > {6}"
-            cmd = cmd.format(path, ppn, np, self.exe(), qe_flags, inf, outf)
+
+            try:
+                # Check if mpirun accepts -ppn flag
+                subprocess.check_output(["mpirun", "-ppn", "1", "ls"])
+                cmd = "cd {0}; mpirun -ppn {1} -np {2} {3} {4} -i {5} > {6}"
+                cmd = cmd.format(path, ppn, np, self.exe(), qe_flags, inf, outf)
+            except:
+                # Doesn't accept -ppn flag
+                cmd = "cd {0}; mpirun -np {1} {2} {3} -i {4} > {5}"
+                cmd = cmd.format(path, np, self.exe(), qe_flags, inf, outf)
 
             log("Running:\n"+cmd)
             try:
