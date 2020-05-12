@@ -634,7 +634,7 @@ def tc_from_a2f_eliashberg_recursive(root_dir):
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
-def calculate_tc(parameters):
+def calculate_tc(parameters, primary_only=False):
 
     # Work out the two k-point grid sizes
     # needed to determine the most sensible
@@ -646,6 +646,9 @@ def calculate_tc(parameters):
         "aux_kpts"     : kpq-1, # Do the smaller kpoint grid first
         "primary_kpts" : kpq,   # Then the normal kpoint grid
     }
+
+    if primary_only:
+        kpqs = {"primary_kpts" : kpq}
 
     # Save working directory
     base_wd = os.getcwd()
