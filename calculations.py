@@ -150,7 +150,7 @@ class calculation:
     # with the given name, will check if the
     # calculation exists and, if so, will attempt
     # to continue it if it is incomplete
-    def run(self, filename=None, path="./"):
+    def run(self, filename=None, path="./", required=True):
 
         if filename is None:
             filename = self.default_filename()
@@ -200,14 +200,23 @@ class calculation:
                 # Log subprocess errror
                 log(e)
 
+            # Check for success
             if not is_complete(outf):
-                msg = "Calculation {0} did not complete, stopping!"
-                msg = msg.format(outf)
-                log(msg)
-                raise RuntimeError(msg)
 
-        # Parse the output
-        return self.parse_output(outf)
+                if required:
+                    msg = "Calculation {0} did not complete, stopping!"
+                    msg = msg.format(outf)
+                    log(msg)
+                    raise RuntimeError(msg)
+                else:
+                    msg = "Calculation {0} did not complete, but isn't required, continuing..."
+                    log(msg.format(outf))
+                    return None
+
+            else:
+
+                # Parse the output
+                return self.parse_output(outf)
 
 # A simple SCF calculation
 class scf(calculation):
@@ -672,7 +681,7 @@ def calculate_tc(parameters, primary_only=False):
             parameters["lattice"] = res["relaxed lattice"]
 
             # Calculate the projected density of states
-            proj_dos(parameters).run()
+            proj_dos(parameters).run(required=False)
 
             # We're gonna need the Eliashberg function from now on
             parameters["la2F"] = True
