@@ -30,7 +30,7 @@ class parameters:
         self["ecutwfc"]          = 60                # plane-wave cutoff (Ry)
         self["occupations"]      = "smearing"        # treat as metallic
         self["degauss"]          = 0.02              # metal smearing width (Ry)
-        self["qpoint_spacing"]   = 0.1               # qpoint spacing (2pi A^-1)
+        self["qpoint_spacing"]   = 0.15              # qpoint spacing (2pi A^-1)
         self["force_cube_grids"] = False             # true if grids must be of form NxNxN
         self["kpts_per_qpt"]     = 6                 # ratio of kpt to qpt grid
         self["ldisp"]            = True              # use a grid of q-points
@@ -189,7 +189,7 @@ class parameters:
             rlat = np.linalg.inv(self["lattice"]).T
             qps  = float(self["qpoint_spacing"])
             b2q  = lambda b : int(np.linalg.norm(b)/qps)
-            grid = [b2q(b) for b in rlat]
+            grid = [max(1,b2q(b)) for b in rlat]
             if self["force_cube_grids"]: grid = [max(grid) for g in grid]
             return grid
 
