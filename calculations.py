@@ -168,6 +168,7 @@ class calculation:
             # Log that we are skipping this complete calculation
             msg = "Calculation \"{0}\" is complete, skipping..."
             log(msg.format(outf))
+            return self.parse_output(outf)
 
         else: # Calculation not complete
 
