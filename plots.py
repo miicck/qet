@@ -111,7 +111,12 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     ax_normal = plt.subplot(221)
     ax_offset = plt.subplot(222)
 
+    method = "None"
+
     for directory in directories:
+        if not os.path.isdir(directory):
+            print("Directory "+directory+" not found, skipping...")
+            continue
 
         tcs1 = []
         tcs2 = []

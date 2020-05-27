@@ -232,6 +232,10 @@ class parameters:
                 msg = "Could not generate k-point grid from parameter set."
                 raise ParamNotFound(msg)
 
+        # Default to k-point parallelism
+        if key == "pools" : return self["cores_per_node"]*self["nodes"]
+        if key == "images": return 1
+
         # This wasn't one of the generatable objects, treat
         # this as a KeyError, so we use the QE default value
         # (if there is one)
@@ -248,6 +252,18 @@ class parameters:
             return self.gen_param(key)
 
         return self.par[key]
+
+    # Check if a key is contained within this parameters object
+    # optionally checking to see if it can be generated
+    def contains_key(self, key, generate=True):
+        if key in self.par:
+            return True
+        if not generate: return False
+        try:
+            self.gen_param(key)
+            return True
+        except:
+            return False
 
     # Validate and standardise a given parameter
     # based on it's key and value

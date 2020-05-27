@@ -106,24 +106,6 @@ def is_complete(filename):
             if "JOB DONE" in line:
                 return True
 
-    # Now we're in a bit of a grey area
-    # sometimes, QE doesn't print JOB DONE
-    # when a job finishes, but the job
-    # might also have timed out, thus not
-    # being complete, but not creating a
-    # CRASH file either. I treat this on a
-    # case-by-case basis.
-
-    last_line = None
-    with open(filename) as f:
-        for line in f:
-            last_line = line
-
-    # This sometimes happens if a phonon calculation has
-    # finished, but had no q-points to calculate?
-    if "re-writing distributed wavefunctions" in last_line:
-        return True
-
     return False
 
 ##################
@@ -177,10 +159,14 @@ class calculation:
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
 
-            # Setup the command to run
+            # Get number of processes
             np  = self.in_params["cores_per_node"]*self.in_params["nodes"]
             ppn = self.in_params["cores_per_node"]
-            qe_flags = "-nk {0}".format(np) # Use k-point parallelism
+
+            # Setup parallelism scheme
+            pools  = self.in_params["pools"]
+            images = self.in_params["images"]
+            qe_flags = "-nk {0} -ni {1}".format(pools, images) 
 
             try:
                 # Check if mpirun accepts -ppn flag
