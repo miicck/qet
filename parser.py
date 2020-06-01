@@ -337,8 +337,7 @@ class a2f_dos_out(output_file):
                             words[i] = "E".join(words[i].split("-"))
                         if "+" in words[i][1:]:
                             words[i] = "E".join(words[i].split("+"))
-                    dat = [float(w) for w in words]
-                    data.append(dat)
+                    data.append([float(w) for w in words])
                 except:
                     print("could not parse a2F line: "+line)
                     continue
@@ -349,3 +348,20 @@ class a2f_dos_out(output_file):
         self["a2f"] = data[1]
         for i in range(2, len(data)):
             self["a2f_mode_{0}".format(i-1)] = data[i]
+
+class phonon_interp_dos_out(output_file):
+
+    def parse(self, filename):
+        
+        data = []
+        with open(filename) as f:
+            for line in f:
+                if line.strip().startswith("#"): continue
+                data.append([float(w) for w in line.split()])
+
+        data = list(zip(*data))
+
+        self["frequencies"] = data[0]
+        self["dos"] = data[1]
+        for i in range(2, len(data)):
+            self["pdos_{0}".format(i-1)] = data[2]

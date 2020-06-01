@@ -632,19 +632,14 @@ def tc_from_a2f_eliashberg_recursive(root_dir):
 # for a given parameter set
 def calculate_tc(parameters, primary_only=False):
 
-    # Work out the two k-point grid sizes
+    # Get the k-point grid sizes
     # needed to determine the most sensible
     # double-delta smearing parameter.
-    kpq = parameters["kpts_per_qpt"]
-    if kpq < 2: kpq = 2
-    
-    kpqs = {
-        "aux_kpts"     : kpq-1, # Do the smaller kpoint grid first
-        "primary_kpts" : kpq,   # Then the normal kpoint grid
-    }
+    kpq = parameters["tc_kpqs"]
 
-    if primary_only:
-        kpqs = {"primary_kpts" : kpq}
+    kpqs = {}
+    for k in kpq:
+        kpqs["kpq_{0}".format(k)] = k
 
     # Save working directory
     base_wd = os.getcwd()
@@ -734,7 +729,7 @@ def tidy_tc_calculations(base_dir=".", remove_incomplete=False):
 
         # Remove the big stuff
         for f in to_remove:
-            log("Removing {0}".format(f), "tidy_tc.log")
             if os.path.isfile(f): os.system("rm "+f)
             elif os.path.isdir(f): os.system("rm -r "+f)
-            else: log("could not find the above", "tidy_tc.log")
+            else: continue
+            log("Removed {0}".format(f), "tidy_tc.log")

@@ -16,6 +16,16 @@ def plot_dos(filename="./dos.out"):
     plt.legend()
     plt.show()
 
+# Plot the phonon density of states in 
+# the given .dos file
+def plot_pdos(filename="./ph_interp.dos"):
+    
+    out = parser.phonon_interp_dos_out(filename)
+    plt.plot(out["frequencies"], out["dos"])
+    plt.xlabel("Frequency (cm$^{-1}$)")
+    plt.ylabel("Phonon DOS")
+    plt.show()
+
 # Plot the projected density of states calculated
 # with output file given by filename
 def plot_proj_dos(filename="./proj_dos.out"):
@@ -100,6 +110,14 @@ def plot_a2f(filename="./a2F.dos1"):
 
 def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     from qet.calculations import tc_from_a2f_allen_dynes
+
+    # If only one directory is given, 
+    # include also subdirectories
+    if len(directories) == 1:
+        for d in os.listdir(directories[0]):
+            d = directories[0]+"/"+d
+            if not os.path.isdir(d): continue
+            directories.append(d)
 
     # Ensure primrary grids are treated first
     def sort_key(d):
@@ -220,6 +238,7 @@ def main():
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
+        "pdos"              : lambda : plot_pdos()
     }
 
     # Check arguments

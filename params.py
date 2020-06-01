@@ -37,7 +37,7 @@ class parameters:
         self["reduce_io"]        = True              # reduce io to a strict minimum
         self["fildvscf"]         = "dvscf"           # potential variation file
         self["electron_phonon"]  = "interpolated"    # electron-phonon method
-        self["el_ph_sigma"]      = 0.005             # smearing spacing
+        self["el_ph_sigma"]      = 0.0025            # smearing spacing
         self["el_ph_nsigma"]     = 50                # smearing points
         self["fildyn"]           = "matdyn"          # dynamical matrix prefix
         self["flfrc"]            = "force_constants" # force constants filename
@@ -235,6 +235,9 @@ class parameters:
         # Default to k-point parallelism
         if key == "pools" : return self["cores_per_node"]*self["nodes"]
         if key == "images": return 1
+
+        # Get the default k-point grids for calculating Tc
+        if key == "tc_kpqs" : return [self["kpts_per_qpt"]-1, self["kpts_per_qpt"]]
 
         # This wasn't one of the generatable objects, treat
         # this as a KeyError, so we use the QE default value
@@ -434,7 +437,7 @@ class parameters:
 
         return i_dealt_with
 
-    # Parse pseudo
+    # Parse pseudopotential directories from input file
     def parse_pseudo_dirs(self, lines):
         
         i_dealt_with = []
@@ -449,6 +452,24 @@ class parameters:
                 self["pseudo_dirs"].append(pd)
 
             i_dealt_with.append(i)
+
+        return i_dealt_with
+
+    # Parse k-point grid sizes to use for Tc calculation
+    def parse_tc_kpqs(self, lines):
+        
+        i_dealt_with = []
+        parsed_kpqs  = []
+        for i, line in enumerate(lines):
+            
+            if not line.startswith("tc_kpqs"):
+                continue
+
+            parsed_kpqs.extend([int(w) for w in line.split()[1:]])
+            i_dealt_with.append(i)
+
+        if len(parsed_kpqs) > 0:
+            self["tc_kpqs"] = parsed_kpqs
 
         return i_dealt_with
 
@@ -509,6 +530,7 @@ class parameters:
         i_dealt_with.extend(self.parse_lattice(lines))
         i_dealt_with.extend(self.parse_atoms(lines))
         i_dealt_with.extend(self.parse_pseudo_dirs(lines))
+        i_dealt_with.extend(self.parse_tc_kpqs(lines))
 
         # Assume the rest is simple key value form
         for i in range(0, len(lines)):
