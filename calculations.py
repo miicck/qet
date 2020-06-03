@@ -381,6 +381,7 @@ class electron_phonon_grid(calculation):
         s += self.in_params.to_input_line("el_ph_sigma")
         s += self.in_params.to_input_line("el_ph_nsigma")
         s += self.in_params.to_input_line("search_sym")
+        s += self.in_params.to_input_line("alpha_mix")
         if recover: s += "    recover = .true.,\n"
         s += "/\n"
 

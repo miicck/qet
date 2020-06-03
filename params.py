@@ -297,6 +297,15 @@ class parameters:
 
         self.par[key] = self.validate_and_standardise_param(key, value)
 
+    # Construct special input lines that do not fit the type-based
+    # construction used in self.to_input_line
+    def special_input_line(self, key, value):
+        
+        # Alpha_mix is an array that defaults to the first entry
+        if key == "alpha_mix":
+            return "    alpha_mix(1) = {0},\n".format(value)
+
+        return None
 
     # Convert a parameter to an input line in a QE file
     def to_input_line(self, key, name=None):
@@ -312,6 +321,10 @@ class parameters:
 
         # Allow name different from key
         if not name is None: key = name
+
+        # Check for special input line
+        sf = self.special_input_line(key, val)
+        if not sf is None: return sf
 
         # Bool type
         if isinstance(val, bool):
