@@ -3,14 +3,14 @@ from   qet.elements         import elements
 from   qet.logs             import log
 import random, copy
 
-def substitute_random_species(structure):
+def substitute_random_species(structure, restrict_to=None):
 
     # Choose the type to be replaced
     to_replace = structure["species"]
     to_replace = to_replace[random.randrange(len(to_replace))][0]
 
     # Choose the type to replace it with
-    sub = propose_substitution(to_replace)
+    sub = propose_substitution(to_replace, restrict_to=restrict_to)
 
     fs = "Replacing {0} with {1} in {2}"
     fs = fs.format(to_replace, sub, structure["stoichiometry_string"])
@@ -19,6 +19,23 @@ def substitute_random_species(structure):
     # Make the replacement
     for i, a in enumerate(structure["atoms"]):
         if a[0] == to_replace: structure["atoms"][i][0] = sub
+
+    return structure
+
+def substitute_random_atom(structure, restrict_to=None):
+    
+    # Choose the atom to be replaced
+    atoms      = structure["atoms"]
+    i_replace  = random.randrange(len(atoms))
+    to_replace = atoms[i_replace][0]
+    sub        = propose_substitution(to_replace, restrict_to=restrict_to)
+
+    fs = "Replacing atom {0} ({1}) with {2} in {3}"
+    fs = fs.format(i_replace, to_replace, sub, structure["stoichiometry_string"])
+    log(fs, "alchemy.log")
+
+    # Make the replacement
+    structure["atoms"][i_replace][0] = sub
 
     return structure
 
