@@ -1,6 +1,7 @@
 from   qet.constants import EV_TO_RY, KBAR_AU3_TO_RY
 from   qet.logs      import log
-import os
+import numpy         as     np
+import os, math
 
 # Base class for output file types
 class output_file:
@@ -312,6 +313,15 @@ class proj_dos_out(output_file):
 
 class a2f_dos_out(output_file):
 
+    def a2f_float(self, word):
+        f = float(word)
+        if math.isnan(f):
+            msg = "NaN appeared in "+self.filename+"!" 
+            log(msg)
+            print(msg)
+            f = 0.0
+        return f
+
     def parse(self, filename):
 
         data = []
@@ -337,15 +347,20 @@ class a2f_dos_out(output_file):
                             words[i] = "E".join(words[i].split("-"))
                         if "+" in words[i][1:]:
                             words[i] = "E".join(words[i].split("+"))
-                    data.append([float(w) for w in words])
-                except:
+                    data.append([self.a2f_float(w) for w in words])
+                except Exception as e:
                     print("could not parse a2F line: "+line)
+                    print("error: "+str(e))
                     continue
         
         # Transpose the data and store
         data = list(zip(*data))
         self["frequencies"] = data[0]
-        self["a2f"] = data[1]
+
+        # Calculate a2f from sum of individual modes, because the
+        # total in the output file propagates NaN's, which we set to
+        # 0 (with a warning) here
+        self["a2f"] = sum(np.array(data[i]) for i in range(2, len(data)))
         for i in range(2, len(data)):
             self["a2f_mode_{0}".format(i-1)] = data[i]
 

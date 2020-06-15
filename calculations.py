@@ -468,7 +468,7 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
     lam  = np.trapz([2*a/w for w, a in wa], x=ws)
     wlog = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=ws))
     wrms = ((2/lam)*np.trapz([a*w for w, a in wa], x=ws))**0.5
-
+   
     tc_ad = {}
     for mu in mu_stars:
         g1 = 2.46*(1+3.8*mu)

@@ -167,7 +167,9 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
                     tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
                     tcs1.append([n, tcs[0.1]])
                     tcs2.append([n, tcs[0.15]])
-                except: continue
+                except Exception as e:
+                    print(e)
+                    continue
 
         # No data => skip
         if len(tcs1) == 0 or len(tcs2) == 0:
