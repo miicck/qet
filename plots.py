@@ -114,21 +114,13 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
     # If only one directory is given, 
     # include also subdirectories
     if len(directories) == 1:
+        plt.suptitle(directories[0])
         for d in os.listdir(directories[0]):
             d = directories[0]+"/"+d
             if not os.path.isdir(d): continue
             directories.append(d)
 
-    # Ensure primrary grids are treated first
-    def sort_key(d):
-        if "primary" in d: return "0"
-        return d
-    directories.sort(key=sort_key)
-
-    tc_offset = None
-    ax_normal = plt.subplot(221)
-    ax_offset = plt.subplot(222)
-
+    # Will contain the method used to evaluate Tc
     method = "None"
 
     for directory in directories:
@@ -166,7 +158,10 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
 
             # No elk directory, calculate using allen-dynes
             else:
+
+                # Some of the a2F.dos files had Eliashberg, some didn't
                 if method != "Allen-Dynes": method = "Mixed"
+
                 try:
                     # Get tc for two different mu* values
                     tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
@@ -174,9 +169,11 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
                     tcs2.append([n, tcs[0.15]])
                 except: continue
 
+        # No data => skip
         if len(tcs1) == 0 or len(tcs2) == 0:
             continue
 
+        # Sort by acending smearing
         tcs1.sort()
         tcs2.sort()
 
@@ -195,31 +192,19 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
                         el_ph_sigma = float(line.split("=")[-1].replace(",",""))
                         break
 
+        # Label with what we're plotting on the x-axis
         if el_ph_sigma is None: 
             plt.xlabel("Smearing number")
         else:
             ns = [el_ph_sigma*n for n in ns]
             plt.xlabel("Smearing width $\\sigma$ (Ry)")
 
-        ax_normal.fill_between(ns, tc1, tc2, alpha=0.5, label=directory) 
+        plt.fill_between(ns, tc1, tc2, alpha=0.5) 
+        plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
 
-        if tc_offset is None: 
-            tc_offset = tc1[-1]
-        else:
-            dt = tc1[-1] - tc_offset
-            tc1 = [t-dt for t in tc1]
-            tc2 = [t-dt for t in tc2]
-
-        ax_offset.fill_between(ns, tc1, tc2, alpha=0.5, label=directory)
-
-
-    for ax in [ax_offset, ax_normal]:
-        ax.set_ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
-        ax.legend()
-
-        if ax.get_ylim()[1] > 1000.0:
-            print("Found T_C > 1000 K, rescaling axis")
-            ax.set_ylim([0, 1000.0])
+    if plt.ylim()[1] > 1000.0:
+        print("Found T_C > 1000 K, rescaling axis")
+        plt.ylim([0,1000])
 
     plt.show()
 
