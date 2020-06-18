@@ -1,11 +1,11 @@
 import qet.parser        as parser
 import qet.constants     as constants
-import matplotlib.pyplot as plt
 import os
 
 # Plot the density of states calculated
 # with output file given by filename
 def plot_dos(filename="./dos.out"):
+    import matplotlib.pyplot as plt
     
     # Parse the DOS
     out = parser.dos_out(filename)
@@ -19,6 +19,7 @@ def plot_dos(filename="./dos.out"):
 # Plot the phonon density of states in 
 # the given .dos file
 def plot_pdos(filename="./ph_interp.dos"):
+    import matplotlib.pyplot as plt
     
     out = parser.phonon_interp_dos_out(filename)
     plt.plot(out["frequencies"], out["dos"])
@@ -29,6 +30,7 @@ def plot_pdos(filename="./ph_interp.dos"):
 # Plot the projected density of states calculated
 # with output file given by filename
 def plot_proj_dos(filename="./proj_dos.out"):
+    import matplotlib.pyplot as plt
     
     # Parse the projected density of states
     out = parser.proj_dos_out(filename)
@@ -80,6 +82,7 @@ def plot_proj_dos(filename="./proj_dos.out"):
     plt.show()
 
 def plot_a2f(filename="./a2F.dos1"):
+    import matplotlib.pyplot as plt
     
     out = parser.a2f_dos_out(filename)
 
@@ -108,17 +111,28 @@ def plot_a2f(filename="./a2F.dos1"):
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
 
-def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False):
+def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     # If only one directory is given, 
     # include also subdirectories
     if len(directories) == 1:
-        plt.suptitle(directories[0])
         for d in os.listdir(directories[0]):
             d = directories[0]+"/"+d
             if not os.path.isdir(d): continue
             directories.append(d)
+
+    if len(directories) == 0:
+        print("No directories to plot in tc_vs_smearing!")
+        return
+    
+    if ask:
+        txt = input("Would you like to plot {0} (n to skip)?".format(directories[0]))
+        if txt == "n":
+            return
+
+    import matplotlib.pyplot as plt
+    plt.suptitle(directories[0])
 
     # Will contain the method used to evaluate Tc
     method = "None"
@@ -221,7 +235,7 @@ def main():
 
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:]),
+        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask="ask" in sys.argv),
         "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True),
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
