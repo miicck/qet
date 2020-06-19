@@ -98,6 +98,16 @@ class parameters:
 
             return spec
 
+        # Work out the space group
+        if key == "space_group":
+            self.eval_symmetry()
+            return self["space_group"]
+
+        # Work out the number of symmetry operations
+        if key == "sym_ops":
+            self.eval_symmetry()
+            return self["sym_ops"]
+
         # Find the pseudo_dir that contains
         # all of the needed pseudopotentials
         if key == "pseudo_dir":
@@ -271,6 +281,10 @@ class parameters:
     # Validate and standardise a given parameter
     # based on it's key and value
     def validate_and_standardise_param(self, key, value):
+        
+        # Try to convert a string value to the correct type
+        if isinstance(value, str):
+            value = str_to_type(value)
 
         if key == "atoms":
 
@@ -290,11 +304,6 @@ class parameters:
 
     # Set parameter values with []
     def __setitem__(self, key, value):
-
-        # Try to convert a string value to the correct type
-        if isinstance(value, str):
-            value = str_to_type(value)
-
         self.par[key] = self.validate_and_standardise_param(key, value)
 
     # Construct special input lines that do not fit the type-based
@@ -561,6 +570,39 @@ class parameters:
 
             self[spl[0]] = spl[1]
 
+    # Use c2x to evaluate the symmetry of the crystal
+    def eval_symmetry(self):
+        
+        # Create a temporary .cell file for c2x to parse
+        TMP_CELL = "tmp_for_symm.cell"
+        TMP_SYMM = "tmp_for_symm.symm"
+        self.save_to_cell(TMP_CELL)
+
+        # Work out the number of symmetry ops
+        os.system("c2x --symmetry "+TMP_CELL+" > /dev/null 2>"+TMP_SYMM)
+        with open(TMP_SYMM) as f:
+            self["sym_ops"] = int(f.read().split()[1])
+
+        # Work out the space group
+        os.system("c2x --int "+TMP_CELL+" 2>"+TMP_SYMM)
+        with open(TMP_SYMM) as f:
+            self["space_group"] = f.read().split()[-1]
+
+        # Remove temporary files
+        os.system("rm "+TMP_CELL+" "+TMP_SYMM)
+
+    # Save the geometry to a CASTEP .cell file
+    def save_to_cell(self, filename):
+        with open(filename,"w") as f:
+            f.write("%BLOCK LATTICE_CART\nANG\n")
+            for l in self["lattice"]:
+                f.write(" ".join([str(w) for w in l])+"\n")
+            f.write("%ENDBLOCK LATTICE_CART\n\n")
+            f.write("%BLOCK POSITIONS_FRAC\n")
+            for a in self["atoms"]:
+                f.write("{0} {1} {2} {3}\n".format(a[0], *a[1]))
+            f.write("%ENDBLOCK POSITIONS_FRAC\n")
+
     # Load from a CASTEP .cell file
     def load_from_cell(self, filename):
         
@@ -579,7 +621,7 @@ class parameters:
                 if "lattice_cart" in line:
                     offset = 1 if "ang" in lines[i+1] else 0
                     for j in range(i+1+offset, i+4+offset):
-                        lattice.append(float(w) for w in lines[j].split())
+                        lattice.append([float(w) for w in lines[j].split()])
                         i_done.append(j)
 
                 if "positions_frac" in line:
