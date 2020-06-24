@@ -216,11 +216,12 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
             plt.xlabel("Smearing width $\\sigma$ (Ry)")
 
         plt.fill_between(ns, tc1, tc2, alpha=0.5, label=directory) 
+        plt.plot(ns, tc2, linestyle="none", marker="+")
         plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
 
     if plt.ylim()[1] > 1000.0:
         print("Found T_C > 1000 K, rescaling axis")
-        plt.ylim([0,1000])
+        plt.ylim([-10,1000])
 
     plt.legend()
     plt.show()

@@ -32,7 +32,7 @@ class parameters:
         self["degauss"]          = 0.02              # metal smearing width (Ry)
         self["qpoint_spacing"]   = 0.15              # qpoint spacing (2pi A^-1)
         self["force_cube_grids"] = False             # true if grids must be of form NxNxN
-        self["kpts_per_qpt"]     = 6                 # ratio of kpt to qpt grid
+        self["kpts_per_qpt"]     = 10                # ratio of kpt to qpt grid
         self["ldisp"]            = True              # use a grid of q-points
         self["reduce_io"]        = True              # reduce io to a strict minimum
         self["fildvscf"]         = "dvscf"           # potential variation file

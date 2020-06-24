@@ -459,6 +459,13 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
     import numpy         as     np
     from   qet.constants import RY_TO_K
 
+    # To populate with Tc, set to 0
+    # for now, so that can be returned in
+    # corresponding edge cases.
+    tc_ad = {}
+    for mu in mu_stars:
+        tc_ad[mu] = 0.0
+
     # Parse the a2f file, ignore negative frequencies/elishberg function
     out = parser.a2f_dos_out(filename)
     wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
@@ -466,10 +473,11 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
 
     # Use the allen-dynes equation to estimate Tc
     lam  = np.trapz([2*a/w for w, a in wa], x=ws)
+    if lam < 10e-10: return tc_ad
+
     wlog = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=ws))
     wrms = ((2/lam)*np.trapz([a*w for w, a in wa], x=ws))**0.5
    
-    tc_ad = {}
     for mu in mu_stars:
         g1 = 2.46*(1+3.8*mu)
         g2 = 1.82*(1+6.3*mu)*(wrms/wlog)
