@@ -46,6 +46,7 @@ class parameters:
         self["ndos"]             = 200               # number of energy steps to use when interpolating DOS
         self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
         self["pseudo_dirs"]      = []                # directories to search for pseudopotentials
+        self["bz_path_points"]   = 100               # the approximate number of points along a BZ path
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -107,6 +108,63 @@ class parameters:
         if key == "sym_ops":
             self.eval_symmetry()
             return self["sym_ops"]
+
+        # Work out a good BZ path
+        if key == "bz_path" or key == "high_symmetry_bz_points":
+            try: import seekpath
+            except ImportError:
+                raise ImportError("Could not import SeeKpath!")
+
+            # Convert the structure into a form that SeeKpath can digest
+            frac_coords  = []
+            atom_numbers = []
+            unique_names = []
+
+            for a in self["atoms"]:
+                if not a[0] in unique_names:
+                    unique_names.append(a[0])
+
+            for a in self["atoms"]:
+                frac_coords.append(a[1])
+                atom_numbers.append(unique_names.index(a[0]))
+            
+
+            # Call SeeKpath to get the BZ path
+            structure = (self["lattice"], frac_coords, atom_numbers)
+            path = seekpath.get_path(
+                structure, 
+                with_time_reversal=True,
+                symprec=0.001,
+                angle_tolerance=0.5,
+                threshold=0)
+
+            # Work out how many points we have along each segment of the BZ path
+            pc          = path["point_coords"]
+            segs        = [[np.array(pc[p[0]]), np.array(pc[p[1]])] for p in path["path"]]
+            seg_names   = [[p[0], p[1]] for p in path["path"]] 
+            seg_lengths = [np.linalg.norm(s[1]-s[0]) for s in segs]
+            tot_length  = sum(seg_lengths)
+            seg_counts  = [max(int(self["bz_path_points"]*l/tot_length),2) for l in seg_lengths]
+
+            kpoints = [] # Will contain the k-points in the path
+            high_symm_points = {} # Will contain the names of high-symmetry points along the path
+
+            for i, c in enumerate(seg_counts):
+                pts = np.linspace(0.0, 1.0, c)
+                pts = [segs[i][0] + (segs[i][1]-segs[i][0])*p for p in pts]
+                high_symm_points[len(kpoints)] = seg_names[i][0]
+                kpoints.extend(pts)
+
+                if i + 1 < len(seg_names) and seg_names[i][1] == seg_names[i+1][0]:
+                    kpoints.pop() # Remove repeated high symmetry point
+                else:
+                    high_symm_points[len(kpoints)-1] = seg_names[i][1]
+
+            self["high_symmetry_bz_points"] = high_symm_points
+            self["bz_path"] = kpoints
+
+            if key == "bz_path": return kpoints
+            else: return high_symm_points
 
         # Find the pseudo_dir that contains
         # all of the needed pseudopotentials
