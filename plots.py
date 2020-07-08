@@ -81,6 +81,42 @@ def plot_proj_dos(filename="./proj_dos.out"):
     # Show the plot
     plt.show()
 
+def plot_ebands(filename="./e_bands.in"):
+    import matplotlib.pyplot as plt
+
+    start     = False
+    exp_count = None
+    kpoints   = []
+    labels    = {}
+    with open(filename) as f:
+        for line in f:
+            if not start:
+                if "K_POINTS" in line:
+                    start = True
+                continue
+
+            if exp_count is None:
+                exp_count = int(line)
+                continue
+
+            if "!" in line:
+                labels[len(kpoints)] = line.split("!")[-1].strip()
+
+            k = [float(x) for x in line.split()[0:3]]
+            kpoints.append(k)
+
+    out = parser.extract_bands_out(filename)
+    bands = zip(*out["bands"])
+    for b in bands:
+        plt.plot(b)
+
+    for i in labels:
+        plt.axvline(i, color="black", linestyle=":")
+    plt.xticks([i for i in labels], [labels[i] for i in labels])
+    ply.ylabel("Energy (Ry)")
+
+    plt.show()
+
 def plot_a2f(filename="./a2F.dos1"):
     import matplotlib.pyplot as plt
     
@@ -215,12 +251,13 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
             ns = [el_ph_sigma*n for n in ns]
             plt.xlabel("Smearing width $\\sigma$ (Ry)")
 
-        plt.fill_between(ns, tc1, tc2, alpha=0.5, label=directory) 
+        plt.fill_between(ns, tc1, tc2, alpha=0.25, label=directory) 
         plt.plot(ns, tc2, linestyle="none", marker="+")
         plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
 
     if plt.ylim()[1] > 1000.0:
         print("Found T_C > 1000 K, rescaling axis")
+        print(tc1)
         plt.ylim([-10,1000])
 
     plt.legend()
@@ -241,7 +278,8 @@ def main():
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
-        "pdos"              : lambda : plot_pdos()
+        "pdos"              : lambda : plot_pdos(),
+        "ebands"            : lambda : plot_ebands()
     }
 
     # Check arguments

@@ -19,7 +19,7 @@ def pad_input_file(s):
     return snew.strip()
 
 # Get the geompetry part of an input file
-def input_geometry(params):
+def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
 
     # Cell parameters card
     s  = "CELL_PARAMETERS (angstrom)\n"
@@ -37,9 +37,22 @@ def input_geometry(params):
     for a in params["atoms"]:
         s += "{0} {1} {2} {3}\n".format(a[0], *a[1])
 
-    # K-points card
-    s += "\nK_POINTS automatic\n"
-    s += "{0} {1} {2} 0 0 0\n".format(*params["kpoint_grid"])
+    if explicit_kpoints is None:
+
+        # automatic K-points card
+        s += "\nK_POINTS automatic\n"
+        s += "{0} {1} {2} 0 0 0\n".format(*params["kpoint_grid"])
+
+    else:
+        
+        # explicit K-points card
+        s += "\nK_POINTS (crystal)\n"
+        w  = 1.0/float(len(explicit_kpoints))
+        s += "{0}\n".format(len(explicit_kpoints))
+        for i, k in enumerate(explicit_kpoints):
+            s += "{0} {1} {2} {3}".format(k[0],k[1],k[2],w)
+            if i in kpoint_labels: s += " ! "+kpoint_labels[i]
+            s += "\n"
 
     return s
 
@@ -224,12 +237,64 @@ class scf(calculation):
     def gen_input_file(self, recover=False):
 
         # Control
-        s  = pw_control_input(self.in_params, 
+        s = pw_control_input(self.in_params, 
             calculation="scf", recover=recover)
 
         # Geometry
         s += input_geometry(self.in_params)
 
+        return pad_input_file(s)
+
+
+class bands(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "pw.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "e_bands"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return None
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+        
+        # Control
+        s = pw_control_input(self.in_params, 
+            calculation="scf", recover=recover)
+
+        # Geometry
+        s += input_geometry(self.in_params, 
+             explicit_kpoints=self.in_params["bz_path"], 
+             kpoint_labels=self.in_params["high_symmetry_bz_points"])
+
+        return pad_input_file(s)
+
+
+class extract_bands(calculation):
+    
+    # The executable that carries out this calculation
+    def exe(self):
+        return "bands.x"
+
+    # The default filename for calculations of this type
+    def default_filename(self):
+        return "e_bands_extract"
+
+    # Parse calculation output
+    def parse_output(self, outf):
+        return None
+
+    # Generate the input file for this calculation
+    def gen_input_file(self, recover=False):
+        
+        s  = "&BANDS\n"
+        s += self.in_params.to_input_line("outdir")
+        s += "/\n"
         return pad_input_file(s)
 
 
@@ -683,6 +748,9 @@ def calculate_tc(parameters, primary_only=False):
             q2r(parameters).run()
             interpolate_phonon(parameters).run()
 
+            # Tidy this calculation
+            tidy_tc_calculations()
+
         except Exception as e:
 
             # Return to the base directory
@@ -694,12 +762,20 @@ def calculate_tc(parameters, primary_only=False):
 
 # Recursively searches for files no longer needed
 # by Tc calculations from calculate_tc() and deletes them
-def tidy_tc_calculations(base_dir=".", remove_incomplete=False):
+def tidy_tc_calculations(base_dir=".", remove_incomplete=False, skip_dirs=[]):
 
     # Find all subdirectories with an elph.in file
     for elph_in in listfiles(base_dir):
         if not elph_in.endswith("elph.in"): continue
         tc_dir = os.path.dirname(elph_in)
+
+        # Check if we should skip this directory
+        skip = False
+        for to_skip in skip_dirs:
+            if to_skip in tc_dir:
+                skip = True
+                break
+        if skip: continue
 
         # Check calculations have completed
         if not remove_incomplete:
@@ -713,7 +789,7 @@ def tidy_tc_calculations(base_dir=".", remove_incomplete=False):
                         n_sig = int(line.split("=")[-1].replace(",",""))
 
             if n_sig is None:
-                log("Could not parse el_ph_nsigma from "+elph_in, "tidy_tc.log")
+                print("Could not parse el_ph_nsigma from "+elph_in)
                 continue
 
             # If there are less than that many a2F files, it's not safe to delete stuff
@@ -723,22 +799,33 @@ def tidy_tc_calculations(base_dir=".", remove_incomplete=False):
                     all_exist = False
                     break
             if not all_exist:
-                log("Not removing unfinshed calculations in "+tc_dir, "tidy_tc.log")
+                print("Not removing unfinshed calculations in "+tc_dir)
                 continue
 
         # Find big files
-        to_remove = []
+        files_to_remove = [
+            tc_dir+"/dyna2F",
+            tc_dir+"/tc_dos_*/mu_*/ELIASHBERG_IA.OUT"
+        ]
+
         for f in os.listdir(tc_dir):
             if f.startswith("pwscf.wfc"):
-                to_remove.append(tc_dir+"/"+f)
+                files_to_remove.append(tc_dir+"/"+f)
 
-        to_remove.append(tc_dir+"/elph_dir")
-        to_remove.append(tc_dir+"/_ph0")
-        to_remove.append(tc_dir+"/pwscf.save")
+        dirs_to_remove = [
+                tc_dir+"/pwscf.save",
+                tc_dir+"/_ph0",
+                tc_dir+"/elph_dir"
+        ]
 
         # Remove the big stuff
-        for f in to_remove:
-            if os.path.isfile(f): os.system("rm "+f)
-            elif os.path.isdir(f): os.system("rm -r "+f)
-            else: continue
-            log("Removed {0}".format(f), "tidy_tc.log")
+        for f in files_to_remove:
+            if os.path.isfile(f):
+                print("removing file "+f)
+                os.system("rm "+f)
+
+        # Remove big directories
+        for d in dirs_to_remove:
+            if os.path.isdir(d):
+                print("removing directory "+d)
+                os.system("rm -r "+d)

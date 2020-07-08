@@ -186,6 +186,30 @@ class phonon_grid_out(output_file):
     def parse(self, filename):
         pass
 
+class extract_bands_out(output_file):
+    
+   def parse(self, filename):
+
+        dir = os.path.dirname(filename)
+        bands = []
+        next = []
+        with open(dir+"/bands.out") as f:
+
+            for line in f:
+                if "nbnd" in line: continue # Skip first line
+
+                splt = line.split()
+
+                if len(splt) == 3:
+                    # This line is a k-point
+                    if len(next) > 0:
+                        bands.append(next)
+                        next = []
+
+                next.extend(float(w) for w in splt)
+
+        self["bands"] = bands
+
 class dos_out(output_file):
     
     def parse(self, filename):
