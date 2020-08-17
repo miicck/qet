@@ -181,15 +181,18 @@ class calculation:
             images = self.in_params["images"]
             qe_flags = "-nk {0} -ni {1}".format(pools, images) 
 
+            # Apply overriden q-e location
+            bin = self.in_params["path_override"]
+
             try:
                 # Check if mpirun accepts -ppn flag
                 subprocess.check_output(["mpirun", "-ppn", "1", "ls"])
                 cmd = "cd {0}; mpirun -ppn {1} -np {2} {3} {4} -i {5} > {6}"
-                cmd = cmd.format(path, ppn, np, self.exe(), qe_flags, inf, outf)
+                cmd = cmd.format(path, ppn, np, bin + self.exe(), qe_flags, inf, outf)
             except:
                 # Doesn't accept -ppn flag
                 cmd = "cd {0}; mpirun -np {1} {2} {3} -i {4} > {5}"
-                cmd = cmd.format(path, np, self.exe(), qe_flags, inf, outf)
+                cmd = cmd.format(path, np, bin + self.exe(), qe_flags, inf, outf)
 
             log("Running:\n"+cmd)
             try:
@@ -702,6 +705,36 @@ def tc_from_a2f_eliashberg_recursive(root_dir):
             log("Failed with excpetion:\n"+str(e), "tc.log")
             pass
 
+# Returns true if the TC calculation in the given directory
+# has completed or not
+def tc_calculation_complete(dirname):
+
+    elph_in = dirname+"/elph.in"
+    if not os.path.isfile(elph_in):
+        return False
+
+    # Parse the number of sigma values
+    # fromthe .in file
+    n_sig = None
+    with open(elph_in) as f:
+        for line in f:
+            if "el_ph_nsigma" in line:
+                n_sig = int(line.split("=")[-1].replace(",",""))
+
+    if n_sig is None:
+        log("Could not parse el_ph_nsigma from "+elph_in)
+        return False
+
+    # If there are less than that many a2F files, the calculation
+    # has not completed
+    all_exist = True
+    for i in range(1, n_sig+1):
+        if not os.path.isfile(dirname + "/a2F.dos{0}".format(i)):
+            all_exist = False
+            break
+
+    return all_exist
+
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
 def calculate_tc(parameters, primary_only=False):
@@ -723,6 +756,10 @@ def calculate_tc(parameters, primary_only=False):
     for dirname in kpqs:
 
         try:
+            if tc_calculation_complete(dirname):
+                log("Calculation " + base_wd + "/" + dirname + " complete, skipping...")
+                continue
+
             # Go into a directory for this kpoint grid
             os.system("mkdir "+dirname)
             os.chdir(dirname)
@@ -736,8 +773,10 @@ def calculate_tc(parameters, primary_only=False):
             parameters["atoms"]   = res["relaxed atoms"]
             parameters["lattice"] = res["relaxed lattice"]
 
-            # Calculate the projected density of states
+            # Calculate the projected density of states/bandstructure
             proj_dos(parameters).run(required=False)
+            bands(parameters).run(required=False)
+            extract_bands(parameters).run(required=False)
 
             # We're gonna need the Eliashberg function from now on
             parameters["la2F"] = True

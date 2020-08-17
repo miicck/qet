@@ -41,6 +41,8 @@ def plot_proj_dos(filename="./proj_dos.out"):
     labels = []
     dfs    = []
 
+    e_fermi = out["fermi energy"]
+
     # Loop over atoms/wavefunctions
     for atom_num in sorted(out["PDOS energies"]):
         for wfn_num in sorted(out["PDOS energies"][atom_num]):
@@ -53,6 +55,9 @@ def plot_proj_dos(filename="./proj_dos.out"):
             wf = out["PDOS wfc names"][atom_num][wfn_num]
             df = out["PDOS (fermi energy)"][atom_num][wfn_num]
 
+            # Plot in eV relative to fermi level
+            es = [(x - e_fermi)*constants.RY_TO_EV for x in es]
+
             # Plot this projected DOS
             label = "Atom {0} ({1}) wfn {2} ({3})"
             label = label.format(atom_num, an, wfn_num, wf)
@@ -61,8 +66,8 @@ def plot_proj_dos(filename="./proj_dos.out"):
             labels.append(label)
             dfs.append(df)
 
-    dos_plot.axvline(out["fermi energy"], linestyle=":", label="Fermi energy")
-    dos_plot.set_xlabel("Energy (Ry)")
+    dos_plot.axvline(0.0, linestyle=":", label="Fermi energy")
+    dos_plot.set_xlabel("Energy (eV)")
     dos_plot.set_ylabel("PDOS")
     dos_plot.set_title("PDOS")
     dos_plot.legend(ncol=int(len(labels)**0.5))
@@ -105,15 +110,29 @@ def plot_ebands(filename="./e_bands.in"):
             k = [float(x) for x in line.split()[0:3]]
             kpoints.append(k)
 
+    e_fermi = None
+    outf = filename.replace(".in", ".out")
+    if os.path.isfile(outf):
+        with open(outf) as f:
+            for line in f:
+                if "the Fermi energy is" in line:
+                    e_fermi = float(line.split()[-2])
+
+    if e_fermi is None:
+        print("Could not identify the fermi energy!")
+        e_fermi = 0.0
+    else:
+        plt.axhline(0.0, color="black")
+
     out = parser.extract_bands_out(filename)
     bands = zip(*out["bands"])
     for b in bands:
-        plt.plot(b)
+        plt.plot([x - e_fermi for x in b])
 
     for i in labels:
         plt.axvline(i, color="black", linestyle=":")
     plt.xticks([i for i in labels], [labels[i] for i in labels])
-    ply.ylabel("Energy (Ry)")
+    plt.ylabel("Energy (eV)")
 
     plt.show()
 
@@ -223,6 +242,7 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
 
         # No data => skip
         if len(tcs1) == 0 or len(tcs2) == 0:
+            print("No data in "+directory)
             continue
 
         # Sort by acending smearing

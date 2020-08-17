@@ -31,6 +31,7 @@ class parameters:
         self["occupations"]      = "smearing"        # treat as metallic
         self["degauss"]          = 0.02              # metal smearing width (Ry)
         self["qpoint_spacing"]   = 0.15              # qpoint spacing (2pi A^-1)
+        self["min_q_grid_size"]  = 2                 # The minimum q-points to a side for a q-point grid
         self["force_cube_grids"] = False             # true if grids must be of form NxNxN
         self["kpts_per_qpt"]     = 10                # ratio of kpt to qpt grid
         self["ldisp"]            = True              # use a grid of q-points
@@ -253,11 +254,11 @@ class parameters:
         # Generate the qpoint grid
         if key == "qpoint_grid":
             
-            # Generate qpoint grid from spacing
+            # Generate qpoint grid from spacing/min_q_grid_size
             rlat = np.linalg.inv(self["lattice"]).T
             qps  = float(self["qpoint_spacing"])
             b2q  = lambda b : int(np.linalg.norm(b)/qps)
-            grid = [max(1,b2q(b)) for b in rlat]
+            grid = [max(self["min_q_grid_size"],b2q(b)) for b in rlat]
             if self["force_cube_grids"]: grid = [max(grid) for g in grid]
             return grid
 
@@ -306,6 +307,9 @@ class parameters:
 
         # Get the default k-point grids for calculating Tc
         if key == "tc_kpqs" : return [self["kpts_per_qpt"]-1, self["kpts_per_qpt"]]
+
+        # Default q-e bin/ path = environment path
+        if key == "path_override" : return ""
 
         # This wasn't one of the generatable objects, treat
         # this as a KeyError, so we use the QE default value
