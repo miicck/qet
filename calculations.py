@@ -1,4 +1,5 @@
 import os
+import time
 import subprocess
 import qet.parser as parser
 from   qet.logs   import log
@@ -66,6 +67,7 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += params.to_input_line("outdir")
     s += params.to_input_line("pseudo_dir")
     s += params.to_input_line("forc_conv_thr")
+    s += params.to_input_line("max_seconds")
     s += "/\n\n"
 
     # System namelist
@@ -183,6 +185,7 @@ class calculation:
 
             # Apply overriden q-e location
             bin = self.in_params["path_override"]
+            if len(bin) > 0: bin += "/"
 
             try:
                 # Check if mpirun accepts -ppn flag
@@ -405,6 +408,7 @@ class phonon_grid(calculation):
         s += self.in_params.to_input_line("outdir")
         s += self.in_params.to_input_line("ldisp")
         s += self.in_params.to_input_line("reduce_io")
+        s += self.in_params.to_input_line("max_seconds")
         s += self.in_params.to_input_line("nq1")
         s += self.in_params.to_input_line("nq2")
         s += self.in_params.to_input_line("nq3")
@@ -443,6 +447,7 @@ class electron_phonon_grid(calculation):
         s += self.in_params.to_input_line("reduce_io")
         s += self.in_params.to_input_line("fildvscf")
         s += self.in_params.to_input_line("electron_phonon")
+        s += self.in_params.to_input_line("max_seconds")
         s += self.in_params.to_input_line("nq1")
         s += self.in_params.to_input_line("nq2")
         s += self.in_params.to_input_line("nq3")

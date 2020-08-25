@@ -1,8 +1,10 @@
 import os, numbers, copy
 import numpy          as     np
+import time
 from   qet.constants  import BOHR_TO_ANGSTROM, ANGSTROM_TO_BOHR
 from   qet.type_tools import str_to_type 
 from   qet.elements   import elements
+from   qet.logs       import log
 from   collections    import defaultdict
 
 # This is thrown when a REQUIRED parameter
@@ -16,8 +18,16 @@ class ParamNotFound(Exception):
 # specification for the actual calculation to run
 class parameters:
     
+    # The first time.time() that __init__ was called
+    first_init_time = None
+
     # Default constructor
     def __init__(self, filename=None):
+
+        # Record the first initialization time
+        if parameters.first_init_time is None:
+            parameters.first_init_time = time.time()
+            log("First init time set to {0}".format(parameters.first_init_time))
 
         # Set the default parameters
         # any unspecified parameters will be left 
@@ -48,6 +58,8 @@ class parameters:
         self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
         self["pseudo_dirs"]      = []                # directories to search for pseudopotentials
         self["bz_path_points"]   = 100               # the approximate number of points along a BZ path
+        self["total_walltime"]   = -1                # allocated walltime in seconds (negative => treat as infinite)
+        self["tidy_up_time"]     = 1800              # time reserved for tidying up at end of total_walltime
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
@@ -70,6 +82,13 @@ class parameters:
 
         if not filename is None:
             self.load(filename)
+
+        # Output timing information
+        log("Initialized parameters object at time {0}".format(time.time()))
+        log("    first_init_time : {0}".format(parameters.first_init_time))
+        log("    total_walltime  : {0}".format(self["total_walltime"]))
+        log("    end_time        : {0}".format(self["end_time"]))
+        log("    max_seconds     : {0}".format(self["max_seconds"]))
 
     # Return a deep copy of myself
     def copy(self):
@@ -310,6 +329,22 @@ class parameters:
 
         # Default q-e bin/ path = environment path
         if key == "path_override" : return ""
+
+        # If total_walltime is > 0, this will be the time returned by
+        # time.time() when we will run out of walltime. Otherwise is -1.
+        if key == "end_time":
+            if self["total_walltime"] < 0: 
+                return -1
+            else: 
+                return parameters.first_init_time + self["total_walltime"] 
+
+        # Returns the maximum seconds we let a calculation run for
+        # from this moment in time. Is equal to the end_time minus
+        # the current time minus the tidy_up_time.
+        if key == "max_seconds":
+            if self["end_time"] < 0:
+                return 10e7 # No end time => essentially infinite time
+            return max(self["end_time"] - time.time() - self["tidy_up_time"], 0)
 
         # This wasn't one of the generatable objects, treat
         # this as a KeyError, so we use the QE default value

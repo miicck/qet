@@ -35,13 +35,15 @@ def plot_proj_dos(filename="./proj_dos.out"):
     # Parse the projected density of states
     out = parser.proj_dos_out(filename)
 
-    dos_plot = plt.subplot(211)
-    df_plot  = plt.subplot(212)
+    dos_plot     = plt.subplot(311)
+    df_plot      = plt.subplot(312)
+    tot_dos_plot = plt.subplot(313)
     
     labels = []
     dfs    = []
 
-    e_fermi = out["fermi energy"]
+    e_fermi   = out["fermi energy"]
+    total_dos = None
 
     # Loop over atoms/wavefunctions
     for atom_num in sorted(out["PDOS energies"]):
@@ -58,6 +60,9 @@ def plot_proj_dos(filename="./proj_dos.out"):
             # Plot in eV relative to fermi level
             es = [(x - e_fermi)*constants.RY_TO_EV for x in es]
 
+            if total_dos is None: total_dos = ps
+            else: total_dos = [t+p for t,p in zip(total_dos, ps)]
+
             # Plot this projected DOS
             label = "Atom {0} ({1}) wfn {2} ({3})"
             label = label.format(atom_num, an, wfn_num, wf)
@@ -71,6 +76,12 @@ def plot_proj_dos(filename="./proj_dos.out"):
     dos_plot.set_ylabel("PDOS")
     dos_plot.set_title("PDOS")
     dos_plot.legend(ncol=int(len(labels)**0.5))
+
+    tot_dos_plot.plot(es, total_dos)
+    tot_dos_plot.set_xlabel("Energy (eV)")
+    tot_dos_plot.set_ylabel("Total DOS")
+    tot_dos_plot.axvline(0.0, linestyle=":", label="Fermi energy")
+    tot_dos_plot.legend()
 
     # Plot the densities of states at the fermi level
     x = range(0, len(labels))
