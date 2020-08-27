@@ -177,6 +177,79 @@ def plot_a2f(filename="./a2F.dos1"):
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
 
+def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    freqs = []
+    evecs = []
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+
+            if line.startswith("("):
+                # parse eigenvector for this atom
+                line = line.replace("(", "")
+                line = line.replace(")", "")
+                x = [float(w) for w in line.split()]
+
+                # Record it's magnitude
+                x = (x[0]*x[0] + x[2]*x[2] + x[4]*x[4])**0.5
+                evecs[len(freqs)-1].append(x)
+                continue
+
+            if line.startswith("freq"):
+                # parse mode frequency in cm^-1
+                w = float(line.split("=")[-1].split("[")[0])
+                freqs.append(w)
+                evecs.append([])
+                continue
+
+    BINS = 1000
+
+    minf  = min(freqs)
+    maxf  = max(freqs)
+    atoms = len(evecs[0])
+    bins  = np.zeros((atoms, BINS+1))
+
+    # Loop over modes
+    for i in range(0, len(freqs)):
+        f = freqs[i]
+
+        b = (f-minf)/(maxf-minf)
+        b = int(b * BINS)
+
+        for j in range(0, atoms):
+            bins[j][b] += evecs[i][j]
+
+    # Attempt to parse atom names from scf.in file
+    atom_names = []
+    started = False
+    scf_file = os.path.dirname(filename)+"/scf.in"
+    if os.path.isfile(scf_file):
+        with open(scf_file) as f:
+            for line in f:
+                if len(atom_names) >= atoms: break
+                if "ATOMIC_POSITIONS" in line:
+                    started = True
+                    continue
+                if started: atom_names.append(line.split()[0])
+
+    # Failed, just use numbers
+    if len(atom_names) < atoms:
+        atom_names = range(atoms)
+
+    # Plot atom-resolved eigenvectors
+    total = np.zeros(BINS+1)
+    freqs = np.linspace(minf, maxf, BINS+1)
+    for j in range(0, atoms):
+        new_total = total + bins[j]
+        plt.fill_between(freqs, total, new_total, label="atom: {0}".format(atom_names[j]))
+        total = new_total
+
+    plt.legend()
+    plt.show()
+
 def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
@@ -310,7 +383,8 @@ def main():
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
         "pdos"              : lambda : plot_pdos(),
-        "ebands"            : lambda : plot_ebands()
+        "ebands"            : lambda : plot_ebands(),
+        "phonon_atoms"      : lambda : plot_phonon_mode_atoms()
     }
 
     # Check arguments
