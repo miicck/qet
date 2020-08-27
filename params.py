@@ -58,7 +58,7 @@ class parameters:
         self["ph_interp_prefix"] = "ph_interp"       # the prefix to give to files produced by phonon interpolations
         self["pseudo_dirs"]      = []                # directories to search for pseudopotentials
         self["bz_path_points"]   = 100               # the approximate number of points along a BZ path
-        self["total_walltime"]   = -1                # allocated walltime in seconds (negative => treat as infinite)
+        self["total_walltime"]   = 129600            # allocated walltime in seconds (negative => treat as infinite)
         self["tidy_up_time"]     = 1800              # time reserved for tidying up at end of total_walltime
 
         # By default, assume cores_per_node is

@@ -118,6 +118,12 @@ def is_complete(filename):
     # JOB DONE => complete
     with open(filename) as f:
         for line in f:
+
+            # If this appears before JOB DONE, not done
+            if "Maximum CPU time exceeded" in line:
+                return False
+
+            # JOB DONE, and no obvious reason to disbelieve
             if "JOB DONE" in line:
                 return True
 
