@@ -687,6 +687,7 @@ class parameters:
 
         # Remove temporary files
         os.system("rm "+TMP_CELL+" "+TMP_SYMM)
+        time.sleep(0.25) # Wait for filesystem to catch up
 
     # Save the geometry to a CASTEP .cell file
     def save_to_cell(self, filename):

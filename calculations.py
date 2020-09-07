@@ -111,10 +111,6 @@ def is_complete(filename):
     if not os.path.isfile(filename):
         return False
 
-    # Crash => not complete
-    if os.path.isfile(os.path.dirname(filename)+"/CRASH"):
-        return False
-
     # JOB DONE => complete
     with open(filename) as f:
         for line in f:
