@@ -1,6 +1,27 @@
-import qet.parser        as parser
-import qet.constants     as constants
+from qet.params import parameters as params
+import qet.parser    as parser
+import qet.constants as constants
 import os
+
+# Get a series of plottable colors
+# indexed by n, cycling
+def color_cycle(n):
+    arr = [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 0.5, 0.0],
+        [1.0, 0.0, 0.5],
+        [0.5, 1.0, 0.0],
+        [0.0, 1.0, 0.5],
+        [0.5, 0.0, 1.0],
+        [0.0, 0.5, 1.0]
+    ]
+
+    return arr[n % len(arr)]
 
 # Plot the density of states calculated
 # with output file given by filename
@@ -195,6 +216,7 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
 
                 # Record it's magnitude
                 x = (x[0]*x[0] + x[2]*x[2] + x[4]*x[4])**0.5
+                print(x)
                 evecs[len(freqs)-1].append(x)
                 continue
 
@@ -239,12 +261,25 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     if len(atom_names) < atoms:
         atom_names = range(atoms)
 
+    # Colors for the various atoms
+    atom_colors = {}
+    for n in atom_names:
+        if n in atom_colors: continue
+        atom_colors[n] = color_cycle(len(atom_colors)-1)
+
     # Plot atom-resolved eigenvectors
     total = np.zeros(BINS+1)
     freqs = np.linspace(minf, maxf, BINS+1)
     for j in range(0, atoms):
+
+        color = atom_colors[atom_names[j]]
         new_total = total + bins[j]
-        plt.fill_between(freqs, total, new_total, label="atom: {0}".format(atom_names[j]))
+
+        plt.fill_between(freqs, total, new_total, 
+            label="atom: {0}".format(atom_names[j]),
+            color=color)
+
+        atom_colors[atom_names[j]] = [c * 0.8 for c in color]
         total = new_total
 
     plt.legend()
@@ -271,7 +306,13 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
             return
 
     import matplotlib.pyplot as plt
-    plt.suptitle(directories[0])
+
+    print("first directory: "+directories[0])
+    title = directories[0]
+    if os.path.isfile(directories[0]+".in"):
+        p = params(directories[0]+".in")
+        title = p["space_group"]+" "+p["stoichiometry_string"]
+    plt.suptitle(title)
 
     # Will contain the method used to evaluate Tc
     method = "None"
