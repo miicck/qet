@@ -132,10 +132,10 @@ def is_complete(filename):
 #  CALCULATIONS  #
 ##################
 
+# Calculation base class, calclation types derive from this
 class calculation:
     
-    # Create an scf calculation from the
-    # given input parameters
+    # Contructor providing parameters
     def __init__(self, in_params):
         
         # Save the input parameters
