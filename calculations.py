@@ -89,17 +89,20 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += params.to_input_line("conv_thr")
     s += "/\n\n"
 
-    # Ions namelist
-    s += "&IONS\n"
-    s += params.to_input_line("ion_dynamics")
-    s += "/\n\n"
+    if calculation == "vc-relax":
 
-    # Cell namelist
-    s += "&CELL\n"
-    s += params.to_input_line("cell_dynamics")
-    s += params.to_input_line("press")
-    s += params.to_input_line("press_conv_thr")
-    s += "/\n\n"
+        # Ions namelist
+        s += "&IONS\n"
+        s += params.to_input_line("ion_dynamics")
+        s += "/\n\n"
+
+        # Cell namelist
+        s += "&CELL\n"
+        s += params.to_input_line("cell_factor")
+        s += params.to_input_line("cell_dynamics")
+        s += params.to_input_line("press")
+        s += params.to_input_line("press_conv_thr")
+        s += "/\n\n"
 
     return s
 
