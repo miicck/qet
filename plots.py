@@ -285,7 +285,8 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     plt.legend()
     plt.show()
 
-def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
+def plot_tc_vs_smearing(directories=["./"], 
+    force_allen_dynes=False, ask=False, plot_relative=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     # If only one directory is given, 
@@ -313,6 +314,10 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
         p = params(directories[0]+".in")
         title = p["space_group"]+" "+p["stoichiometry_string"]
     plt.suptitle(title)
+
+    if plot_relative:
+        print("Plotting relative")
+    tc_rel = None
 
     # Will contain the method used to evaluate Tc
     method = "None"
@@ -396,6 +401,13 @@ def plot_tc_vs_smearing(directories=["./"], force_allen_dynes=False, ask=False):
             ns = [el_ph_sigma*n for n in ns]
             plt.xlabel("Smearing width $\\sigma$ (Ry)")
 
+        if plot_relative and tc_rel is None:
+            tc_rel = tc1[-1]
+        elif not (tc_rel is None):
+            diff = tc1[-1] - tc_rel
+            tc1 = [t1 - diff for t1 in tc1]
+            tc2 = [t2 - diff for t2 in tc2]
+
         plt.fill_between(ns, tc1, tc2, alpha=0.25, label=directory) 
         plt.plot(ns, tc2, linestyle="none", marker="+")
         plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
@@ -416,10 +428,13 @@ def plot_alch_network(directory=None):
 def main():
     import sys
 
+    ask = "ask" in sys.argv
+    rel = "rel" in sys.argv
+
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask="ask" in sys.argv),
-        "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True),
+        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel),
+        "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
