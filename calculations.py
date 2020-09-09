@@ -122,6 +122,10 @@ def is_complete(filename):
             if "Maximum CPU time exceeded" in line:
                 return False
 
+            # No convergence => not done
+            if "No convergence has been achieved" in line:
+                return False
+
             # JOB DONE, and no obvious reason to disbelieve
             if "JOB DONE" in line:
                 return True
