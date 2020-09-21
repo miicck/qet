@@ -1,7 +1,7 @@
-from qet.calculations               import relax, proj_dos
-from qet.alchemy.network            import alch_network
-from qet.alchemy                    import mutations
-from qet.examples.initial_ternaries import get_initial_ternaries
+from qet.calculations               import relax, proj_dos       # Basic QE calculation types that we will use
+from qet.alchemy.network            import alch_network          # The alchemical optimization method that we will use
+from qet.alchemy                    import mutations             # The alchemical moves that we will employ
+from qet.examples.initial_ternaries import get_initial_ternaries # Initial seed structures for this example
 
 def is_valid(structure):
     
