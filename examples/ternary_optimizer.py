@@ -7,6 +7,8 @@ def minus_h_dos(structure):
 
     # Relax the structure
     res = relax(structure).run()
+    
+    # Update the structure to the relaxed version
     structure["atoms"]   = res["relaxed atoms"]
     structure["lattice"] = res["relaxed lattice"]
 
