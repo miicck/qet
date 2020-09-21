@@ -29,7 +29,7 @@ def h_dos(structure):
 
             # Accumulate the total and hydrogen DOS
             total_dos += dos_ef
-            if atom_name.strip().lower() == "h":
+            if atom_name == "H":
                 hydrogen_dos += dos_ef
 
     return hydrogen_dos/total_dos
