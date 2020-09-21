@@ -3,7 +3,7 @@ from qet.alchemy.network            import alch_network          # The alchemica
 from qet.alchemy                    import mutations             # The alchemical moves that we will employ
 from qet.examples.initial_ternaries import get_initial_ternaries # Initial seed structures for this example
 
-def minus_h_dos(structure):
+def h_dos(structure):
 
     # Relax the structure
     res = relax(structure).run()
@@ -32,7 +32,7 @@ def minus_h_dos(structure):
             if atom_name.strip().lower() == "h":
                 hydrogen_dos += dos_ef
 
-    return -hydrogen_dos/total_dos
+    return hydrogen_dos/total_dos
 
 def is_valid(structure):
     
@@ -65,9 +65,12 @@ def maximize_hdos(muts, init_structures=None):
     for structure in init_structures:
         nw.create_vertex(structure)
 
+    # Setup the function to minimize
+    to_min = lambda s : -h_dos(s)
+        
     # Optimize the network
     for n in range(0, 100):
-        nw.expand_to_minimize(minus_h_dos, muts, is_valid=is_valid)
+        nw.expand_to_minimize(to_min, muts, is_valid=is_valid)
 
 def fd3m_search():
     
