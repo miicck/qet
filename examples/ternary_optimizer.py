@@ -3,27 +3,6 @@ from qet.alchemy.network            import alch_network          # The alchemica
 from qet.alchemy                    import mutations             # The alchemical moves that we will employ
 from qet.examples.initial_ternaries import get_initial_ternaries # Initial seed structures for this example
 
-def is_valid(structure):
-    
-    MAX_NON_H = 6
-    MIN_H_PER_NON_H = 1
-    MAX_H_PER_NON_H = 8
-
-    species = structure["species"]
-    if len(species) != 3: return False # Only ternaries
-
-    counts = structure["atom_counts"]
-    non_hs = sum([counts[e] for e in counts if not e == "H"])
-
-    # Limit on non-hydrogens
-    if non_hs > MAX_NON_H : return False
-
-    # Limits on number of hydrogens
-    if counts["H"] > MAX_H_PER_NON_H * non_hs: return False
-    if counts["H"] < MIN_H_PER_NON_H * non_hs: return False
-
-    return True
-
 def minus_h_dos(structure):
 
     # Relax the structure
@@ -52,6 +31,27 @@ def minus_h_dos(structure):
                 hydrogen_dos += dos_ef
 
     return -hydrogen_dos/total_dos
+
+def is_valid(structure):
+    
+    MAX_NON_H = 6
+    MIN_H_PER_NON_H = 1
+    MAX_H_PER_NON_H = 8
+
+    species = structure["species"]
+    if len(species) != 3: return False # Only ternaries
+
+    counts = structure["atom_counts"]
+    non_hs = sum([counts[e] for e in counts if not e == "H"])
+
+    # Limit on non-hydrogens
+    if non_hs > MAX_NON_H : return False
+
+    # Limits on number of hydrogens
+    if counts["H"] > MAX_H_PER_NON_H * non_hs: return False
+    if counts["H"] < MIN_H_PER_NON_H * non_hs: return False
+
+    return True
 
 def maximize_hdos(muts, init_structures=None):
 
