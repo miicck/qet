@@ -91,8 +91,7 @@ states at the fermi level:
 nw = alch_network("network")
 
 # Add the seed structures
-if init_structures is None: init_structures = get_initial_ternaries()
-for structure in init_structures:
+for structure in get_initial_ternaries():
     nw.create_vertex(structure)
 
 # Setup the function to minimize
