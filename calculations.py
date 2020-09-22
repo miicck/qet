@@ -179,7 +179,7 @@ class calculation:
         else: # Calculation not complete
 
             # Create input file, run calculation
-            recover  = os.path.isfile(outf)
+            recover = os.path.isfile(outf)
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
 
@@ -752,6 +752,9 @@ def tc_calculation_complete(dirname):
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
 def calculate_tc(parameters, primary_only=False):
+
+    log("Tc calculation using parameters:")
+    log(str(parameters))
 
     # Get the k-point grid sizes
     # needed to determine the most sensible
