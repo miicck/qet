@@ -1,7 +1,38 @@
-from qet.calculations               import relax, proj_dos
-from qet.alchemy.network            import alch_network
-from qet.alchemy                    import mutations
-from qet.examples.initial_ternaries import get_initial_ternaries
+from qet.calculations               import relax, proj_dos       # Basic QE calculation types that we will use
+from qet.alchemy.network            import alch_network          # The alchemical optimization method that we will use
+from qet.alchemy                    import mutations             # The alchemical moves that we will employ
+from qet.examples.initial_ternaries import get_initial_ternaries # Initial seed structures for this example
+
+def h_dos(structure):
+
+    # Relax the structure
+    res = relax(structure).run()
+    
+    # Update the structure to the relaxed version
+    structure["atoms"]   = res["relaxed atoms"]
+    structure["lattice"] = res["relaxed lattice"]
+
+    # Calculate the DOS
+    res = proj_dos(structure).run()
+
+    # Get the fraction of the DOS due to hydrogens
+    total_dos    = 0.0
+    hydrogen_dos = 0.0
+
+    # Loop over atoms and atomic wavefunctions
+    for atom_number in res["PDOS (fermi energy)"]:
+        for wfc_number in res["PDOS (fermi energy)"][atom_number]:
+
+            # Get the type of atom and the contribution to the DOS at E_F
+            atom_name = res["PDOS atom names"][atom_number][wfc_number]
+            dos_ef    = res["PDOS (fermi energy)"][atom_number][wfc_number]
+
+            # Accumulate the total and hydrogen DOS
+            total_dos += dos_ef
+            if atom_name == "H":
+                hydrogen_dos += dos_ef
+
+    return hydrogen_dos/total_dos
 
 def is_valid(structure):
     
@@ -24,35 +55,6 @@ def is_valid(structure):
 
     return True
 
-def minus_h_dos(structure):
-
-    # Relax the structure
-    res = relax(structure).run()
-    structure["atoms"]   = res["relaxed atoms"]
-    structure["lattice"] = res["relaxed lattice"]
-
-    # Calculate the DOS
-    res = proj_dos(structure).run()
-
-    # Get the fraction of the DOS due to hydrogens
-    total_dos    = 0.0
-    hydrogen_dos = 0.0
-
-    # Loop over atoms and atomic wavefunctions
-    for atom_number in res["PDOS (fermi energy)"]:
-        for wfc_number in res["PDOS (fermi energy)"][atom_number]:
-
-            # Get the type of atom and the contribution to the DOS at E_F
-            atom_name = res["PDOS atom names"][atom_number][wfc_number]
-            dos_ef    = res["PDOS (fermi energy)"][atom_number][wfc_number]
-
-            # Accumulate the total and hydrogen DOS
-            total_dos += dos_ef
-            if atom_name.strip().lower() == "h":
-                hydrogen_dos += dos_ef
-
-    return -hydrogen_dos/total_dos
-
 def maximize_hdos(muts, init_structures=None):
 
     # Load/create the network
@@ -63,9 +65,12 @@ def maximize_hdos(muts, init_structures=None):
     for structure in init_structures:
         nw.create_vertex(structure)
 
+    # Setup the function to minimize
+    to_min = lambda s : -h_dos(s)
+        
     # Optimize the network
     for n in range(0, 100):
-        nw.expand_to_minimize(minus_h_dos, muts, is_valid=is_valid)
+        nw.expand_to_minimize(to_min, muts, is_valid=is_valid)
 
 def fd3m_search():
     
