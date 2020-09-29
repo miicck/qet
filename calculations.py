@@ -818,7 +818,7 @@ def calculate_tc(parameters, primary_only=False):
 
 # Recursively searches for files no longer needed
 # by Tc calculations from calculate_tc() and deletes them
-def tidy_tc_calculations(base_dir=".", remove_incomplete=False, skip_dirs=[]):
+def tidy_tc_calculations(base_dir=".", remove_incomplete=False, skip_dirs=[], older_than=-1):
 
     # Find all subdirectories with an elph.in file
     for elph_in in listfiles(base_dir):
@@ -832,6 +832,13 @@ def tidy_tc_calculations(base_dir=".", remove_incomplete=False, skip_dirs=[]):
                 skip = True
                 break
         if skip: continue
+
+        # Check if this file is old enough to be removed (in days)
+        if older_than > 0:
+            age = time.time() - os.path.getmtime(tc_dir)
+            age = age / (3600.0*24.0)
+            if age < older_than:
+                continue
 
         # Check calculations have completed
         if not remove_incomplete:
