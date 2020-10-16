@@ -791,9 +791,13 @@ def calculate_tc(parameters, primary_only=False):
             parameters["lattice"] = res["relaxed lattice"]
 
             # Calculate the projected density of states/bandstructure
-            proj_dos(parameters).run(required=False)
-            bands(parameters).run(required=False)
-            extract_bands(parameters).run(required=False)
+            try:
+                proj_dos(parameters).run(required=False)
+                bands(parameters).run(required=False)
+                extract_bands(parameters).run(required=False)
+            except Exception as ignored_ex:
+                log("Encountered an expection when carrying out non-essential task.")
+                log(str(ignored_ex))
 
             # We're gonna need the Eliashberg function from now on
             parameters["la2F"] = True
