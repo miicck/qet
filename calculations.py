@@ -751,7 +751,7 @@ def tc_calculation_complete(dirname):
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
-def calculate_tc(parameters, primary_only=False):
+def calculate_tc(parameters, primary_only=False, skip_elph=False):
 
     log("Tc calculation using parameters:")
     log(str(parameters))
@@ -795,17 +795,19 @@ def calculate_tc(parameters, primary_only=False):
             bands(parameters).run(required=False)
             extract_bands(parameters).run(required=False)
 
-            # We're gonna need the Eliashberg function from now on
-            parameters["la2F"] = True
+            if not skip_elph:
 
-            # Run the succesion of neccasary calculations
-            scf(parameters).run()
-            electron_phonon_grid(parameters).run()
-            q2r(parameters).run()
-            interpolate_phonon(parameters).run()
+                # We're gonna need the Eliashberg function from now on
+                parameters["la2F"] = True
 
-            # Tidy this calculation
-            tidy_tc_calculations()
+                # Run the succesion of neccasary calculations
+                scf(parameters).run()
+                electron_phonon_grid(parameters).run()
+                q2r(parameters).run()
+                interpolate_phonon(parameters).run()
+
+                # El-Ph complete, tidy up the huge files created
+                tidy_tc_calculations()
 
         except Exception as e:
 

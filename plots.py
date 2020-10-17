@@ -118,6 +118,146 @@ def plot_proj_dos(filename="./proj_dos.out"):
     # Show the plot
     plt.show()
 
+def plot_h_derived_dos(filename="./proj_dos.out", plot=True):
+    if plot:
+        import matplotlib.pyplot as plt
+    
+    # Parse the projected density of states
+    out = parser.proj_dos_out(filename)
+
+    # Get the fermi energy
+    e_fermi = out["fermi energy"]
+
+    h_dos = None
+    non_h_dos = None
+    
+    # Loop over atoms/wavefunctions
+    for atom_num in sorted(out["PDOS energies"]):
+        for wfn_num in sorted(out["PDOS energies"][atom_num]):
+
+            # Get energies, projected dos, atom name 
+            # and wavefunction name
+            es = out["PDOS energies"][atom_num][wfn_num]
+            ps = out["PDOS (energy)"][atom_num][wfn_num]
+            an = out["PDOS atom names"][atom_num][wfn_num]
+            wf = out["PDOS wfc names"][atom_num][wfn_num]
+            df = out["PDOS (fermi energy)"][atom_num][wfn_num]
+
+            # Plot in eV relative to fermi level
+            es = [(x - e_fermi)*constants.RY_TO_EV for x in es]
+
+            # Accumulate hydrogen, or non-hydrogen dos
+            if an.lower() == "h":
+                if h_dos is None: h_dos = ps
+                else: h_dos = [h + p for h,p in zip(h_dos, ps)]
+            else:
+                if non_h_dos is None: non_h_dos = ps
+                else: non_h_dos = [n + p for n,p in zip(non_h_dos, ps)]
+
+    if (h_dos is None):
+        print(filename+" has no hydrogen!")
+        return 0
+
+    if (non_h_dos is None):
+        print(filename+" is purely hydrogen!")
+        return 0
+
+    # Work out the dos ratio
+    ratio = [0 if abs(h) < 10e-10 else h/(h+n) for h,n in zip(h_dos, non_h_dos)]
+
+    # Work out the index of the fermi energy
+    i_fermi = 0
+    min_abs = float("inf") 
+    for i in range(0, len(es)):
+        if abs(es[i]) < min_abs:
+            min_abs = abs(es[i])
+            i_fermi = i
+
+    val_band_max = i_fermi
+    con_band_min = i_fermi
+
+    dos_thresh = 10e-3
+    if h_dos[i_fermi] + non_h_dos[i_fermi] < dos_thresh:
+
+        # This is an insulator, identify the band edges
+        while con_band_min < len(es):
+            if h_dos[con_band_min] + non_h_dos[con_band_min] > dos_thresh:
+                break
+            con_band_min = con_band_min + 1
+
+        while val_band_max >= 0:
+            if h_dos[val_band_max] + non_h_dos[val_band_max] > dos_thresh:
+                break
+            val_band_max = val_band_max - 1
+
+    # Will contain doping values and coresponding hydrogen-dos ratio changes
+    doping_res = []
+
+    # Work out the result of positive doping
+    for i in range(con_band_min, len(es)):
+        doping = es[i] - es[con_band_min]
+        if abs(doping) > 0.2: break # Too much doping
+        doping_res.append([doping, ratio[i] - ratio[con_band_min]])
+    
+    # Work out the result of negative doping
+    for i in range(val_band_max, -1, -1):
+        doping = es[i] - es[val_band_max]
+        if abs(doping) > 0.2: break # Too much doping
+        doping_res.append([doping, ratio[i] - ratio[val_band_max]])
+
+    doping_res.sort()
+    doping, dosinc = zip(*doping_res)
+
+    i_max = dosinc.index(max(dosinc))
+    if i_max == i_fermi: score = 0.0
+    else: score = dosinc[i_max]/abs(doping[i_max])
+
+    if plot:
+
+        # Plot stuff
+        plt.subplot(311)
+        plt.xlabel("Energy (eV)")
+        plt.ylabel("DOS")
+        plt.plot(es, h_dos, label="Hydrogen derived DOS")
+        plt.plot(es, non_h_dos, label="Non-hydrogen DOS")
+        plt.axvline(0, color="black", linestyle=":", label="Fermi energy")
+        plt.axvline(es[val_band_max], color="blue")
+        plt.axvline(es[con_band_min], color="blue")
+        plt.legend()
+
+        plt.subplot(312)
+        plt.xlabel("Energy (eV)")
+        plt.ylabel("Hydrogen-derived DOS ratio")
+        plt.plot(es, ratio)
+        plt.axvline(0, color="black", linestyle=":", label="Fermi energy")
+        plt.axvline(es[val_band_max], color="blue")
+        plt.axvline(es[con_band_min], color="blue")
+        plt.legend()
+
+        plt.subplot(313)
+        plt.xlabel("Doping (eV)")
+        plt.ylabel("Change in Hydrogen DOS ratio")
+        plt.plot(doping, dosinc)
+        plt.axvline(0, color="black", linestyle=":", label="Fermi energy")
+        plt.axhline(0, color="black", label="No DOS ratio change")
+        plt.axvline(doping[i_max], color="green", label="Max DOS increase, score = {0}".format(score))
+        plt.legend()
+
+        plt.show()
+
+    return score
+
+def rank_doping(dirs):
+
+    score_name = []
+    for d in dirs:
+        s = plot_h_derived_dos(filename=d+"/proj_dos.out", plot=False)
+        score_name.append([s,d])
+
+    score_name.sort()
+    for s, d in score_name:
+        print(s,d)
+
 def plot_ebands(filename="./e_bands.in"):
     import matplotlib.pyplot as plt
 
@@ -159,7 +299,7 @@ def plot_ebands(filename="./e_bands.in"):
     out = parser.extract_bands_out(filename)
     bands = zip(*out["bands"])
     for b in bands:
-        plt.plot([x - e_fermi for x in b])
+        plt.plot([x - e_fermi for x in b], marker="+", linestyle="none")
 
     for i in labels:
         plt.axvline(i, color="black", linestyle=":")
@@ -216,7 +356,6 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
 
                 # Record it's magnitude
                 x = (x[0]*x[0] + x[2]*x[2] + x[4]*x[4])**0.5
-                print(x)
                 evecs[len(freqs)-1].append(x)
                 continue
 
@@ -282,7 +421,7 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
         atom_colors[atom_names[j]] = [c * 0.8 for c in color]
         total = new_total
 
-    plt.legend()
+    plt.legend(ncol=int(atoms**0.5))
     plt.show()
 
 def plot_tc_vs_smearing(directories=["./"], 
@@ -438,6 +577,8 @@ def main():
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
+        "proj_dos_h"        : lambda : plot_h_derived_dos(),
+        "rank_doping"       : lambda : rank_doping(sys.argv[2:]),
         "pdos"              : lambda : plot_pdos(),
         "ebands"            : lambda : plot_ebands(),
         "phonon_atoms"      : lambda : plot_phonon_mode_atoms()
