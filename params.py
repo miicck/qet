@@ -133,6 +133,7 @@ class parameters:
         if key == "bz_path" or key == "high_symmetry_bz_points":
             try: import seekpath
             except ImportError:
+                log("Could not import seekpath!")
                 raise ImportError("Could not import SeeKpath!")
 
             # Convert the structure into a form that SeeKpath can digest
