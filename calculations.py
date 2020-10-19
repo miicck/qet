@@ -780,6 +780,7 @@ def calculate_tc(parameters, primary_only=False, skip_elph=False):
             # Go into a directory for this kpoint grid
             os.system("mkdir "+dirname)
             os.chdir(dirname)
+            log("Switched to directory "+dirname)
 
             # Setup the kpoint grid for this directory
             parameters["kpts_per_qpt"] = kpqs[dirname]

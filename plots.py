@@ -156,11 +156,11 @@ def plot_h_derived_dos(filename="./proj_dos.out", plot=True):
 
     if (h_dos is None):
         print(filename+" has no hydrogen!")
-        return 0
+        return [0, False]
 
     if (non_h_dos is None):
         print(filename+" is purely hydrogen!")
-        return 0
+        return [0, False]
 
     # Work out the dos ratio
     ratio = [0 if abs(h) < 10e-10 else h/(h+n) for h,n in zip(h_dos, non_h_dos)]
@@ -197,20 +197,23 @@ def plot_h_derived_dos(filename="./proj_dos.out", plot=True):
     for i in range(con_band_min, len(es)):
         doping = es[i] - es[con_band_min]
         if abs(doping) > 0.2: break # Too much doping
-        doping_res.append([doping, ratio[i] - ratio[con_band_min]])
+        doping_res.append([doping, ratio[i] - ratio[con_band_min], h_dos[i]])
     
     # Work out the result of negative doping
     for i in range(val_band_max, -1, -1):
         doping = es[i] - es[val_band_max]
         if abs(doping) > 0.2: break # Too much doping
-        doping_res.append([doping, ratio[i] - ratio[val_band_max]])
+        doping_res.append([doping, ratio[i] - ratio[val_band_max], h_dos[i]])
+
+    # Work out if this is a metal, or an insulator
+    is_metal = val_band_max == con_band_min
 
     doping_res.sort()
-    doping, dosinc = zip(*doping_res)
+    doping, dosinc, doping_hdos = zip(*doping_res)
 
+    # Work out a score based on the maximum increase in the DOS
     i_max = dosinc.index(max(dosinc))
-    if i_max == i_fermi: score = 0.0
-    else: score = dosinc[i_max]/abs(doping[i_max])
+    score = dosinc[i_max]/abs(doping[i_max])
 
     if plot:
 
@@ -238,25 +241,24 @@ def plot_h_derived_dos(filename="./proj_dos.out", plot=True):
         plt.xlabel("Doping (eV)")
         plt.ylabel("Change in Hydrogen DOS ratio")
         plt.plot(doping, dosinc)
-        plt.axvline(0, color="black", linestyle=":", label="Fermi energy")
         plt.axhline(0, color="black", label="No DOS ratio change")
         plt.axvline(doping[i_max], color="green", label="Max DOS increase, score = {0}".format(score))
         plt.legend()
 
         plt.show()
 
-    return score
+    return [score, is_metal]
 
 def rank_doping(dirs):
 
     score_name = []
     for d in dirs:
-        s = plot_h_derived_dos(filename=d+"/proj_dos.out", plot=False)
-        score_name.append([s,d])
+        s, m = plot_h_derived_dos(filename=d+"/proj_dos.out", plot=False)
+        score_name.append([s,d, m])
 
     score_name.sort()
-    for s, d in score_name:
-        print(s,d)
+    for s, d, m in score_name:
+        print(s,d,"metal" if m else "insulator")
 
 def plot_ebands(filename="./e_bands.in"):
     import matplotlib.pyplot as plt
