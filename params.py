@@ -120,9 +120,9 @@ class parameters:
             return spec
 
         # Work out the space group
-        if key == "space_group":
+        if key == "space_group_name":
             self.eval_symmetry()
-            return self["space_group"]
+            return self["space_group_name"]
 
         # Work out the number of symmetry operations
         if key == "sym_ops":
@@ -684,7 +684,7 @@ class parameters:
         # Work out the space group
         os.system("c2x --int "+TMP_CELL+" 2>"+TMP_SYMM)
         with open(TMP_SYMM) as f:
-            self["space_group"] = f.read().split()[-1]
+            self["space_group_name"] = f.read().split()[-1]
 
         # Remove temporary files
         os.system("rm "+TMP_CELL+" "+TMP_SYMM)

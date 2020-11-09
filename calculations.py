@@ -1,6 +1,8 @@
 import os
 import time
 import subprocess
+import psutil
+import threading
 import qet.parser as parser
 from   qet.logs   import log
 
@@ -22,11 +24,17 @@ def pad_input_file(s):
 # Get the geompetry part of an input file
 def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
 
+    # S will eventually contain the text for
+    # the geometry part of the input
+    s = ""
+
     # Cell parameters card
-    s  = "CELL_PARAMETERS (angstrom)\n"
-    s += "{0} {1} {2}\n".format(*params["lattice"][0])
-    s += "{0} {1} {2}\n".format(*params["lattice"][1])
-    s += "{0} {1} {2}\n".format(*params["lattice"][2])
+    # (only specified if a,b,c alph, beta, gamma aren't
+    if not params.contains_key("a"):
+        s += "CELL_PARAMETERS (angstrom)\n"
+        s += "{0} {1} {2}\n".format(*params["lattice"][0])
+        s += "{0} {1} {2}\n".format(*params["lattice"][1])
+        s += "{0} {1} {2}\n".format(*params["lattice"][2])
 
     # Atomic species card
     s += "\nATOMIC_SPECIES\n"
@@ -34,7 +42,10 @@ def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
         s += "{0} {1} {2}\n".format(*sp)
 
     # Atomic positions card
-    s += "\nATOMIC_POSITIONS (crystal)\n"
+    if params.contains_key("space_group"):
+        s += "\nATOMIC_POSITIONS (crystal_sg)\n"
+    else:
+        s += "\nATOMIC_POSITIONS (crystal)\n"
     for a in params["atoms"]:
         s += "{0} {1} {2} {3}\n".format(a[0], *a[1])
 
@@ -74,7 +85,16 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += "&SYSTEM\n"
     s += params.to_input_line("ntyp")
     s += params.to_input_line("nat")
-    s += params.to_input_line("ibrav")
+    if params.contains_key("space_group"):
+        s += params.to_input_line("space_group")
+    else:
+        s += params.to_input_line("ibrav")
+    s += params.to_input_line("a")
+    s += params.to_input_line("b")
+    s += params.to_input_line("c")
+    s += params.to_input_line("cosab")
+    s += params.to_input_line("cosbc")
+    s += params.to_input_line("cosac")
     s += params.to_input_line("ecutwfc")
     s += params.to_input_line("ecutrho")
     s += params.to_input_line("occupations")
@@ -131,6 +151,42 @@ def is_complete(filename):
                 return True
 
     return False
+     
+
+# A thread for tracking cpu/memory
+# usage, which can be stopped
+class cpu_tracking_thread(threading.Thread):
+
+    def __init__(self, filename="cpu_ram_usage",  *args, **kwargs):
+        super(cpu_tracking_thread, self).__init__(*args, **kwargs)
+        self.stop_event = threading.Event()
+        self.filename = filename
+
+    def stop(self):
+        self.stop_event.set()
+
+    def stopped(self):
+        return self.stop_event.is_set()
+
+    def run(self):
+        REPEAT_TIME = 60*2
+        STOP_CHECK_TIME = 5
+        start_time  = time.time()
+
+        with open(self.filename, "w") as f:
+
+            fs = "Time elapsed: {0}s, {1}% memory, {2}% cpu\n"
+            while True:
+
+                mem = psutil.virtual_memory().percent
+                cpu = psutil.cpu_percent()
+                tim = round(time.time()-start_time, 1)
+                f.write(fs.format(tim, mem, cpu))
+                f.flush()
+
+                for i in range(0, int(REPEAT_TIME/STOP_CHECK_TIME)):
+                    if self.stopped(): return
+                    time.sleep(STOP_CHECK_TIME)
 
 ##################
 #  CALCULATIONS  #
@@ -160,6 +216,10 @@ class calculation:
 
         if filename is None:
             filename = self.default_filename()
+
+        # Start tracking thread
+        tracking = cpu_tracking_thread(filename=filename+".cpu")
+        tracking.start()
         
         # Remove trailing /'s from path
         path = path.strip()
@@ -174,6 +234,7 @@ class calculation:
             # Log that we are skipping this complete calculation
             msg = "Calculation \"{0}\" is complete, skipping..."
             log(msg.format(outf))
+            tracking.stop()
             return self.parse_output(outf)
 
         else: # Calculation not complete
@@ -222,15 +283,18 @@ class calculation:
                     msg = "Calculation {0} did not complete, stopping!"
                     msg = msg.format(outf)
                     log(msg)
+                    tracking.stop()
                     raise RuntimeError(msg)
                 else:
                     msg = "Calculation {0} did not complete, but isn't required, continuing..."
                     log(msg.format(outf))
+                    tracking.stop()
                     return None
 
             else:
 
                 # Parse the output
+                tracking.stop()
                 return self.parse_output(outf)
 
 # A simple SCF calculation
@@ -755,6 +819,7 @@ def calculate_tc(parameters, primary_only=False, skip_elph=False):
 
     log("Tc calculation using parameters:")
     log(str(parameters))
+    log("Using mpirun: "+str(subprocess.check_output("which mpirun", shell=True)))
 
     # Get the k-point grid sizes
     # needed to determine the most sensible
