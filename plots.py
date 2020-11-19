@@ -453,7 +453,7 @@ def plot_tc_vs_smearing(directories=["./"],
     title = directories[0]
     if os.path.isfile(directories[0]+".in"):
         p = params(directories[0]+".in")
-        title = p["space_group"]+" "+p["stoichiometry_string"]
+        title = p["space_group_name"]+" "+p["stoichiometry_string"]
     plt.suptitle(title)
 
     if plot_relative:

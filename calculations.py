@@ -161,6 +161,7 @@ class cpu_tracking_thread(threading.Thread):
         super(cpu_tracking_thread, self).__init__(*args, **kwargs)
         self.stop_event = threading.Event()
         self.filename = filename
+        self.start_time = time.time()
 
     def stop(self):
         self.stop_event.set()
@@ -168,25 +169,29 @@ class cpu_tracking_thread(threading.Thread):
     def stopped(self):
         return self.stop_event.is_set()
 
+    def record(self, file):
+        fs = "{0}, {1}, {2}\n"
+        mem = psutil.virtual_memory().percent
+        cpu = psutil.cpu_percent()
+        tim = round(time.time()-self.start_time, 1)
+        file.write(fs.format(tim, mem, cpu))
+        file.flush()
+
     def run(self):
-        REPEAT_TIME = 60*2
-        STOP_CHECK_TIME = 5
-        start_time  = time.time()
+        
+        # Time between records
+        REPEAT_TIME = 10
 
+        # Open the logging file
         with open(self.filename, "w") as f:
+            f.write("Time (s) memory (%) cpu (%)\n")
 
-            fs = "Time elapsed: {0}s, {1}% memory, {2}% cpu\n"
             while True:
 
-                mem = psutil.virtual_memory().percent
-                cpu = psutil.cpu_percent()
-                tim = round(time.time()-start_time, 1)
-                f.write(fs.format(tim, mem, cpu))
-                f.flush()
-
-                for i in range(0, int(REPEAT_TIME/STOP_CHECK_TIME)):
-                    if self.stopped(): return
-                    time.sleep(STOP_CHECK_TIME)
+                # Record every REPEAT_TIME seconds
+                time.sleep(REPEAT_TIME)
+                self.record(f)
+                if self.stopped(): return
 
 ##################
 #  CALCULATIONS  #

@@ -1,5 +1,6 @@
 import multiprocessing as mp
 from qet.plots import plot_tc_vs_smearing
+from qet.plots import plot_phonon_mode_atoms
 import os
 import time
 import sys
@@ -41,3 +42,12 @@ for f in dir_data:
     p = mp.Process(target=plot_tc_vs_smearing, args=([f],))
     p.start()
     running.append(p)
+
+    for k in os.listdir(f):
+        if not k.startswith("kpq"): continue
+        m = f+"/"+k+"/ph_interp.modes"
+        if not os.path.isfile(m): continue
+        p2 = mp.Process(target=plot_phonon_mode_atoms, args=(m,))
+        p2.start()
+        running.append(p2)
+        break
