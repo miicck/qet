@@ -222,6 +222,9 @@ class calculation:
         if filename is None:
             filename = self.default_filename()
 
+        log("Starting {0} {1} calculation ({2}):".format(
+            "required" if required else "optional", self.exe(), filename))
+
         # Start tracking thread
         tracking = cpu_tracking_thread(filename=filename+".cpu")
         tracking.start()
