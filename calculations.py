@@ -823,7 +823,7 @@ def tc_calculation_complete(dirname):
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
-def calculate_tc(parameters, primary_only=False, skip_elph=False):
+def calculate_tc(parameters, primary_only=False, skip_elph=False, phonons_only=False):
 
     log("Tc calculation using parameters:")
     log(str(parameters))
@@ -876,11 +876,13 @@ def calculate_tc(parameters, primary_only=False, skip_elph=False):
             if not skip_elph:
 
                 # We're gonna need the Eliashberg function from now on
-                parameters["la2F"] = True
+                # (unless we're just doing the phonons)
+                parameters["la2F"] = not phonons_only
 
                 # Run the succesion of neccasary calculations
                 scf(parameters).run()
-                electron_phonon_grid(parameters).run()
+                if phonons_only: phonon_grid(parameters).run()
+                else: electron_phonon_grid(parameters).run()
                 q2r(parameters).run()
                 interpolate_phonon(parameters).run()
 

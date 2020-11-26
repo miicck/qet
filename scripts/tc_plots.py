@@ -10,6 +10,12 @@ for f in os.listdir("."):
     if not os.path.isdir(f): continue
     dir_data.append(f)
 
+starting_from = None
+for a in sys.argv[1:]:
+    if a.startswith("starting_from="):
+        starting_from = a.split("=")[-1]
+        sys.argv.remove(a)
+
 selected_dirs = []
 for f in sys.argv[1:]:
     found = None
@@ -26,6 +32,8 @@ for f in sys.argv[1:]:
 if len(selected_dirs) > 0: dir_data = selected_dirs
 
 dir_data.sort()
+if not starting_from is None:
+    dir_data = dir_data[dir_data.index(starting_from):]
 
 cpus    = 2
 running = []

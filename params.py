@@ -732,3 +732,27 @@ class parameters:
 
         self["lattice"] = lattice
         self["atoms"]   = atoms
+
+    # Load from a quantum espresso .in file
+    def load_from_qe_input(self, filename):
+
+        lattice = []
+        atoms   = []
+        
+        with open(filename) as f:
+            lines = [l.strip().lower() for l in f.read().split("\n")]
+            for i, line in enumerate(lines):
+                if "cell_parameters" in line:
+                    for j in range(i+1, i+4):
+                        lattice.append([float(w) for w in lines[j].split()])
+
+                if "atomic_positions" in line:
+                    for j in range(i+1, len(lines)):
+                        try:
+                            name, x, y, z = lines[j].split()
+                            atoms.append([name, [float(x), float(y), float(z)]])
+                        except:
+                            break
+
+        self["lattice"] = lattice
+        self["atoms"]   = atoms

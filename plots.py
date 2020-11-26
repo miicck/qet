@@ -2,6 +2,7 @@ from qet.params import parameters as params
 import qet.parser    as parser
 import qet.constants as constants
 import os
+import math
 
 # Get a series of plottable colors
 # indexed by n, cycling
@@ -340,6 +341,73 @@ def plot_a2f(filename="./a2F.dos1"):
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
     plt.show()
 
+# Returns the squared distnace between two points
+# in reciprocal space, including folding
+def delta_q(q, p):
+    q = [x - math.floor(x) for x in q]
+    p = [x - math.floor(x) for x in p]
+    d = [abs(q[i] -p[i]) for i in range(3)]
+    return sum(x*x for x in d)
+
+def plot_phonon_dispersion(filename="./ph_interp.freq"):
+    import matplotlib.pyplot as plt        
+
+    # Load the structure from an scf.in file
+    # in the current directory
+    p = params()
+    p.load_from_qe_input("scf.in")
+
+    # Parse filename for the phonon modes
+    q_point = None
+    modes = {}
+    with open(filename) as f:
+        for line in f:
+            try:
+                splt = [float(x) for x in line.split()]
+                if len(splt) == 3 and all(x <= 1.0 and x >= 0.0 for x in splt):
+                    q_point = tuple(splt)
+                else:
+                    if not q_point in modes:
+                        modes[q_point] = []
+                    modes[q_point].extend(splt)
+            except:
+                pass
+
+    # Perform nearest neighbour interpolation
+    # along the BZ path, to obtain a phonon dispersion
+    dispersion = []
+    for q in p["bz_path"]:
+        q = tuple(q)
+
+        found = None
+        min_dis = float("inf")
+        for q2 in modes:
+            dis = delta_q(q,q2)
+            if dis < min_dis:
+                min_dis = dis
+                found = q2
+        
+        dispersion.append(modes[found])
+
+    # Plot the phonon dispersion
+    plt.ylabel("Frequency (cm^-1)")
+    plt.axhline(0, color="black")
+    for mode in zip(*dispersion):
+        plt.plot(mode)
+
+    # Label high-symmetry points
+    hsp = p["high_symmetry_bz_points"]
+    ticks = []
+    labels = []
+    for pt in hsp:
+        plt.axvline(pt, color=[0.5,0.5,0.5])
+        ticks.append(pt)
+        labels.append(hsp[pt])
+
+
+    plt.xticks(ticks=ticks, labels=labels, rotation=90)
+    plt.show()
+
 def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     import matplotlib.pyplot as plt
     import numpy as np
@@ -583,7 +651,8 @@ def main():
         "rank_doping"       : lambda : rank_doping(sys.argv[2:]),
         "pdos"              : lambda : plot_pdos(),
         "ebands"            : lambda : plot_ebands(),
-        "phonon_atoms"      : lambda : plot_phonon_mode_atoms()
+        "phonon_atoms"      : lambda : plot_phonon_mode_atoms(),
+        "phonon_dispersion" : lambda : plot_phonon_dispersion()
     }
 
     # Check arguments
