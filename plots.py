@@ -517,12 +517,12 @@ def plot_tc_vs_smearing(directories=["./"],
 
     import matplotlib.pyplot as plt
 
-    print("first directory: "+directories[0])
     title = directories[0]
     if os.path.isfile(directories[0]+".in"):
         p = params(directories[0]+".in")
         title = p["space_group_name"]+" "+p["stoichiometry_string"]
     plt.suptitle(title)
+    print("first directory: "+directories[0]+"({0})".format(title))
 
     if plot_relative:
         print("Plotting relative")

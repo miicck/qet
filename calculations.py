@@ -222,16 +222,12 @@ class calculation:
         if filename is None:
             filename = self.default_filename()
 
-        log("Starting {0} {1} calculation ({2}):".format(
-            "required" if required else "optional", self.exe(), filename))
-
-        # Start tracking thread
-        tracking = cpu_tracking_thread(filename=filename+".cpu")
-        tracking.start()
+        log("Starting {0} {1} calculation ({2}) at {3}:".format(
+            "required" if required else "optional", self.exe(), filename, path))
         
         # Remove trailing /'s from path
         path = path.strip()
-        while path.endswith("/"): path = path[0:-1]
+        path = path.rstrip("/")
 
         inf  = path+"/"+filename+".in"
         outf = path+"/"+filename+".out"
@@ -242,15 +238,18 @@ class calculation:
             # Log that we are skipping this complete calculation
             msg = "Calculation \"{0}\" is complete, skipping..."
             log(msg.format(outf))
-            tracking.stop()
             return self.parse_output(outf)
 
         else: # Calculation not complete
 
             # Create input file, run calculation
             recover = os.path.isfile(outf)
+
+            log("Generating input file...")
             with open(inf, "w") as f:
                 f.write(self.gen_input_file(recover=recover))
+
+            log("Setting up command to run...")
 
             # Get number of processes
             np  = self.in_params["cores_per_node"]*self.in_params["nodes"]
@@ -276,6 +275,11 @@ class calculation:
                 cmd = cmd.format(path, np, bin + self.exe(), qe_flags, inf, outf)
 
             log("Running:\n"+cmd)
+
+            # Start tracking thread
+            tracking = cpu_tracking_thread(filename=filename+".cpu")
+            tracking.start()
+
             try:
                 # Run calculation, log stdout/stderr
                 stdout = subprocess.check_output([cmd], stderr=subprocess.STDOUT, shell=True)
@@ -284,6 +288,8 @@ class calculation:
                 # Log subprocess errror
                 log(e)
 
+            tracking.stop()
+
             # Check for success
             if not is_complete(outf):
 
@@ -291,18 +297,15 @@ class calculation:
                     msg = "Calculation {0} did not complete, stopping!"
                     msg = msg.format(outf)
                     log(msg)
-                    tracking.stop()
                     raise RuntimeError(msg)
                 else:
                     msg = "Calculation {0} did not complete, but isn't required, continuing..."
                     log(msg.format(outf))
-                    tracking.stop()
                     return None
 
             else:
 
                 # Parse the output
-                tracking.stop()
                 return self.parse_output(outf)
 
 # A simple SCF calculation
@@ -823,7 +826,11 @@ def tc_calculation_complete(dirname):
 
 # Calculate the conventional superconducting critical temeprature
 # for a given parameter set
-def calculate_tc(parameters, primary_only=False, skip_elph=False, phonons_only=False):
+def calculate_tc(parameters, 
+    primary_only=False, 
+    skip_elph=False, 
+    phonons_only=False,
+    phonons_from_elph=False):
 
     log("Tc calculation using parameters:")
     log(str(parameters))
@@ -883,6 +890,12 @@ def calculate_tc(parameters, primary_only=False, skip_elph=False, phonons_only=F
                 scf(parameters).run()
                 if phonons_only: phonon_grid(parameters).run()
                 else: electron_phonon_grid(parameters).run()
+
+                # We're recovering just the phonon information
+                # from an electron-phonon calculation
+                if phonons_from_elph:
+                    parameters["la2F"] = False
+
                 q2r(parameters).run()
                 interpolate_phonon(parameters).run()
 
