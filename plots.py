@@ -313,12 +313,17 @@ def plot_ebands(filename="./e_bands.in"):
 
 def plot_a2f(filename="./a2F.dos1"):
     import matplotlib.pyplot as plt
+    from qet.calculations import tc_from_a2f_allen_dynes, tc_allen_dynes
     
     out = parser.a2f_dos_out(filename)
+    tc = tc_from_a2f_allen_dynes(filename)
 
     # Convert frequencies to Cm^-1
     ws = out["frequencies"] 
     ws = [w*constants.RY_TO_CMM1 for w in ws]
+
+    # Start first plot (a2f)
+    plt.subplot(211)
 
     # Run over mode-resolved eliashberg functions
     total  = None
@@ -337,8 +342,30 @@ def plot_a2f(filename="./a2F.dos1"):
         total = new_total
         i_mode += 1
 
+    plt.suptitle("$Tc \in [{0}, {1}]$".format(round(tc[0.15]), round(tc[0.1])))
     plt.xlabel("Frequency $\\omega$ (cm$^{-1}$)")
     plt.ylabel("$\\alpha^2F(\\omega)$\n(colored by mode)")
+
+    # Start second plot (d(Tc)/d(a2f))
+    plt.subplot(212)
+
+    a2f = out["a2f"]
+    epsilon = max(a2f)/1000.0
+    tc_0 = tc[0.1]
+    dtc_da2f = [0.0]*len(a2f)
+
+    for i in range(len(a2f)):
+        a2f_tmp = list(a2f)
+        a2f_tmp[i] += epsilon
+        tc_1 = tc_allen_dynes(out["frequencies"], a2f_tmp, mu_stars=[0.1])[0.1]
+        dtc_da2f[i] = (tc_1 - tc_0)/epsilon
+
+    plt.plot(ws, dtc_da2f)
+    plt.axhline(0, color="black")
+    plt.xlabel("Frequency $\\omega$ (cm$^{-1}$)")
+    plt.ylabel("$d(T_c)/d(\\alpha^2F)(\\omega)$")
+
+    # Show the plot
     plt.show()
 
 # Returns the squared distnace between two points

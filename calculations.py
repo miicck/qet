@@ -615,24 +615,18 @@ class interpolate_phonon(calculation):
         s += "/\n"
 
         return pad_input_file(s)
-    
-# For a given a2f.dos file, calculate Tc for
-# each of the given mu* values, using the allen-dynes
-# equation
-def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
+
+# Calculate Tc using the allen-dynes equation from
+# a given a2f(frequency)
+def tc_allen_dynes(frequencies, a2f, mu_stars=[0.1, 0.15]):
     import numpy         as     np
     from   qet.constants import RY_TO_K
 
-    # To populate with Tc, set to 0
-    # for now, so that can be returned in
-    # corresponding edge cases.
     tc_ad = {}
     for mu in mu_stars:
         tc_ad[mu] = 0.0
 
-    # Parse the a2f file, ignore negative frequencies/elishberg function
-    out = parser.a2f_dos_out(filename)
-    wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
+    wa  = [[w,max(a,0)] for w,a in zip(frequencies, a2f) if w > 0]
     ws  = [w for w,a in wa]
 
     # Use the allen-dynes equation to estimate Tc
@@ -650,6 +644,16 @@ def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
         tc_ad[mu] = RY_TO_K*f1*f2*(wlog/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
 
     return tc_ad
+    
+# For a given a2f.dos file, calculate Tc for
+# each of the given mu* values, using the allen-dynes
+# equation
+def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15]):
+
+    # Parse the a2f file, ignore negative frequencies/elishberg function
+    out = parser.a2f_dos_out(filename)
+
+    return tc_allen_dynes(out["frequencies"], out["a2f"], mu_stars=mu_stars)
 
 # Calculate TC by solving the eliashberg equations (requires elk)
 def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
