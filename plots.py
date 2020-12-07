@@ -495,7 +495,7 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     plt.show()
 
 def plot_tc_vs_smearing(directories=["./"], 
-    force_allen_dynes=False, ask=False, plot_relative=False):
+    force_allen_dynes=False, ask=False, plot_relative=False, plot_over_1000=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     # If only one directory is given, 
@@ -621,10 +621,11 @@ def plot_tc_vs_smearing(directories=["./"],
         plt.plot(ns, tc2, linestyle="none", marker="+")
         plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
 
-    if plt.ylim()[1] > 1000.0:
-        print("Found T_C > 1000 K, rescaling axis")
-        print(tc1)
-        plt.ylim([-10,1000])
+    if not plot_over_1000:
+        if plt.ylim()[1] > 1000.0:
+            print("Found T_C > 1000 K, rescaling axis")
+            print(tc1)
+            plt.ylim([-10,1000])
 
     plt.legend()
     plt.show()
@@ -639,10 +640,11 @@ def main():
 
     ask = "ask" in sys.argv
     rel = "rel" in sys.argv
+    p1000 = "plot_1000" in sys.argv
 
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel),
+        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000),
         "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),

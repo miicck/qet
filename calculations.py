@@ -101,6 +101,13 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += params.to_input_line("smearing")
     s += params.to_input_line("degauss")
     s += params.to_input_line("la2F")
+    s += params.to_input_line("nr1")
+    s += params.to_input_line("nr2")
+    s += params.to_input_line("nr3")
+    s += params.to_input_line("nr1s")
+    s += params.to_input_line("nr2s")
+    s += params.to_input_line("nr3s")
+    s += params.to_input_line("nosym")
     s += "/\n\n"
 
     # Electrons namelist
@@ -830,7 +837,8 @@ def calculate_tc(parameters,
     primary_only=False, 
     skip_elph=False, 
     phonons_only=False,
-    phonons_from_elph=False):
+    phonons_from_elph=False,
+    tidy_after=True):
 
     log("Tc calculation using parameters:")
     log(str(parameters))
@@ -900,7 +908,8 @@ def calculate_tc(parameters,
                 interpolate_phonon(parameters).run()
 
                 # El-Ph complete, tidy up the huge files created
-                tidy_tc_calculations()
+                if tidy_after:
+                    tidy_tc_calculations()
 
         except Exception as e:
 
