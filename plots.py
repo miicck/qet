@@ -522,7 +522,8 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     plt.show()
 
 def plot_tc_vs_smearing(directories=["./"], 
-    force_allen_dynes=False, ask=False, plot_relative=False, plot_over_1000=False):
+    force_allen_dynes=False, ask=False, plot_relative=False, 
+    plot_over_1000=False, attenuation_freq=None):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     # If only one directory is given, 
@@ -599,7 +600,8 @@ def plot_tc_vs_smearing(directories=["./"],
 
                 try:
                     # Get tc for two different mu* values
-                    tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15])
+                    tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15], 
+                        attenuation_freq=attenuation_freq)
                     tcs1.append([n, tcs[0.1]])
                     tcs2.append([n, tcs[0.15]])
                 except Exception as e:
@@ -669,9 +671,15 @@ def main():
     rel = "rel" in sys.argv
     p1000 = "plot_1000" in sys.argv
 
+    att_freq = None
+    for a in sys.argv[2:]:
+        if a.startswith("att_freq="):
+            att_freq = float(a.split("=")[-1])
+            break
+
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000),
+        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq),
         "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
