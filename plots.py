@@ -423,14 +423,17 @@ def plot_phonon_dispersion(filename="./ph_interp.freq"):
         plt.plot(mode)
 
     # Label high-symmetry points
-    hsp = p["high_symmetry_bz_points"]
-    ticks = []
+    hsp    = p["high_symmetry_bz_points"]
+    path   = p["bz_path"]
+    ticks  = []
     labels = []
+    ymax = plt.gca().get_ylim()[1]
     for pt in hsp:
         plt.axvline(pt, color=[0.5,0.5,0.5])
         ticks.append(pt)
+        plt.annotate(", ".join(str(x) for x in path[pt]), (pt, ymax/2), 
+                     rotation=90, backgroundcolor=(1,1,1,0.5))
         labels.append(hsp[pt])
-
 
     plt.xticks(ticks=ticks, labels=labels, rotation=90)
     plt.show()
@@ -525,6 +528,9 @@ def plot_tc_vs_smearing(directories=["./"],
     force_allen_dynes=False, ask=False, plot_relative=False, 
     plot_over_1000=False, attenuation_freq=None):
     from qet.calculations import tc_from_a2f_allen_dynes
+
+    if not attenuation_freq is None:
+        attenuation_freq *= constants.CMM1_TO_RY
 
     # If only one directory is given, 
     # include also subdirectories

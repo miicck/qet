@@ -94,6 +94,26 @@ class parameters:
     def copy(self):
         return copy.deepcopy(self)
 
+
+    ####################
+    # PARAMETER ACCESS #
+    ####################
+
+
+    # Get parameter values with []
+    def __getitem__(self, key):
+
+        # Attempt to generate the
+        # parameter if key if not found
+        if not key in self.par:
+            return self.gen_param(key)
+
+        return self.par[key]
+
+    # Set parameter values with []
+    def __setitem__(self, key, value):
+        self.par[key] = self.validate_and_standardise_param(key, value)
+
     # Try to generate the parameter from
     # the parameters we have
     def gen_param(self, key):
@@ -352,17 +372,6 @@ class parameters:
         # (if there is one)
         exept = "Key \"{0}\" cold not be generated in parameters object."
         raise KeyError(exept.format(key))
-            
-
-    # Get parameter values with []
-    def __getitem__(self, key):
-
-        # Attempt to generate the
-        # parameter if key if not found
-        if not key in self.par:
-            return self.gen_param(key)
-
-        return self.par[key]
 
     # Check if a key is contained within this parameters object
     # optionally checking to see if it can be generated
@@ -399,10 +408,12 @@ class parameters:
             value = np.array(value)
 
         return value
+            
 
-    # Set parameter values with []
-    def __setitem__(self, key, value):
-        self.par[key] = self.validate_and_standardise_param(key, value)
+    #########################
+    # INPUT FILE GENERATION #
+    #########################
+
 
     # Construct special input lines that do not fit the type-based
     # construction used in self.to_input_line
@@ -477,6 +488,158 @@ class parameters:
             # Output key : value
             s += fs.format(p, self.par[p], type(self.par[p]))
         return s
+
+    ############
+    # SYMMETRY #
+    ############
+
+    # Use c2x to evaluate the symmetry of the crystal
+    # (c2x is available at https://www.c2x.org.uk/)
+    def eval_symmetry(self):
+        
+        # Create a temporary .cell file for c2x to parse
+        TMP_CELL = "tmp_for_symm.cell"
+        TMP_SYMM = "tmp_for_symm.symm"
+        self.save_to_cell(TMP_CELL)
+
+        # Work out the number of symmetry ops
+        os.system("c2x --symmetry "+TMP_CELL+" > /dev/null 2>"+TMP_SYMM)
+        with open(TMP_SYMM) as f:
+            self["sym_ops"] = int(f.read().split()[1])
+
+        # Work out the space group
+        os.system("c2x --int "+TMP_CELL+" 2>"+TMP_SYMM)
+        with open(TMP_SYMM) as f:
+            self["space_group_name"] = f.read().split()[-1]
+
+        # Remove temporary files
+        os.system("rm "+TMP_CELL+" "+TMP_SYMM)
+        time.sleep(0.25) # Wait for filesystem to catch up
+
+
+    # For a wavevector k_p in the B.Z of this crystal, returns 
+    # a supercell of this crystal for which the wavevector
+    # folds back to the gamma point (i.e returns a supercell
+    # that can support explicit pertubations with wavevector k)
+    def generate_commensurate_supercell(self, k_p):
+        import math
+        import numpy as np
+        from fractions import Fraction
+
+        if len(k_p) != 3:
+            raise Exception("Expected k-vector of length 3!")
+
+        # The fundamental logic here is described in
+        # 10.1103/PhysRevB.92.184301
+        # We essentially brute-force search the 
+        # Hermite-normal form (HNF) supercell matricies S 
+        # until we find k_s = S k_p such that k_s has 
+        # integer entries
+        is_int = lambda v : abs(v - round(v)) < 10e-4
+        possibilities = []
+
+        # Find the lowest common multiple of the
+        # denominators of the fractional entries in k_p
+        # (this is the determinant of the supercell matrix needed)
+        lcm = None
+        for i in range(0, 3):
+            f = Fraction(k_p[i]).limit_denominator(100)
+            d = f.denominator
+            if lcm is None: lcm = d
+            else: lcm = lcm * d // math.gcd(lcm, d)
+
+        # Loop over all diagonals of S
+        # which give the desired determinant (lcm)
+        for s11 in range(1, lcm+1):
+            for s22 in range(1, lcm//s11+1):
+                s33 = lcm//s11//s22
+                if s11*s22*s33 != lcm: continue
+
+                # Loop over off-diagonals that satisfy HNF
+                for s12 in range(0, s22):
+                    for s13 in range(0, s33):
+                        for s23 in range(0, s33):
+
+                            # Evaluate k_s and check if it is integer
+                            ks1 = s11*k_p[0] + s12*k_p[1] + s13*k_p[2]
+                            if not is_int(ks1): continue
+                            ks2 = s22*k_p[1] + s23*k_p[2]
+                            if not is_int(ks2): continue
+                            ks3 = s33*k_p[2]
+                            if not is_int(ks3): continue
+
+                            # Record this supercell
+                            possibilities.append([s11, s12, s13, s22, s23, s33])
+
+        # Algorithm failed
+        if len(possibilities) == 0:
+            fs = "Could not find supercell of size {0} comensurate with k = {1}!"
+            raise Exception(fs.format(lcm, k_p))
+
+        norm_sq      = lambda v : v[0]*v[0] + v[1]*v[1] + v[2]*v[2]
+        lowest_score = float("inf")
+        lat          = self["lattice"]
+        ss           = None
+        ss_lat       = None
+
+        # Find the possibility with the smallest 
+        # average basis vector size
+        for p in possibilities:
+
+            # Work out supercell basis vectors
+            v1 = p[0]*lat[0] + p[1]*lat[1] + p[2]*lat[2]
+            v2 = p[3]*lat[1] + p[4]*lat[2]
+            v3 = p[5]*lat[2]
+
+            # Record if score is lowest so far
+            score = norm_sq(v1) + norm_sq(v2) + norm_sq(v3)
+            if score < lowest_score:
+                lowest_score = score
+                ss = p
+                ss_lat = [v1, v2, v3]
+
+        superlat_inv = np.linalg.inv(np.array(ss_lat).T)
+        max_delta = max(ss)*4
+        frac_eps  = 10e-4
+        ss_atoms  = []
+
+        # Work out where the atoms go in the supercell
+        for a in self["atoms"]:
+
+            # The position of the atom in the first unit cell in cartesians
+            cart_pos = a[1][0]*lat[0]+a[1][1]*lat[1]+a[1][2]*lat[2]
+
+            # Loop over images of the pimitive cell
+            for dx in range(-max_delta, max_delta+1):
+                for dy in range(-max_delta, max_delta+1):
+                    for dz in range(-max_delta, max_delta+1):
+
+                        # The position of the image of the atom in cartesians
+                        # and in fractional supercell coordinates
+                        image_pos    = cart_pos + dx*lat[0] + dy*lat[1] + dz*lat[2]
+                        frac_pos_sup = np.dot(superlat_inv, image_pos)
+
+                        # If x is in the first supercell, add it to the supercell atoms
+                        # (exclude atoms at 1.0 because we're including atoms at 0.0)
+                        if all([x > -frac_eps and x < 1-frac_eps for x in frac_pos_sup]):
+                            ss_atoms.append([a[0], frac_pos_sup])
+
+        # Build the supercell
+        sup = self.copy()
+        sup["lattice"] = ss_lat
+        sup["atoms"]   = ss_atoms
+
+        # Check that the supercell contains the correct number of atoms
+        if len(self["atoms"])*lcm != len(sup["atoms"]):
+            raise Exception("Supercell does not contain the correct number of atoms!")
+
+        return sup
+
+
+    ####################
+    # SAVING / LOADING #
+    ####################
+
 
     # Parse the crystal lattice from input file lines
     def parse_lattice(self, lines):
@@ -668,27 +831,6 @@ class parameters:
 
             self[spl[0]] = spl[1]
 
-    # Use c2x to evaluate the symmetry of the crystal
-    def eval_symmetry(self):
-        
-        # Create a temporary .cell file for c2x to parse
-        TMP_CELL = "tmp_for_symm.cell"
-        TMP_SYMM = "tmp_for_symm.symm"
-        self.save_to_cell(TMP_CELL)
-
-        # Work out the number of symmetry ops
-        os.system("c2x --symmetry "+TMP_CELL+" > /dev/null 2>"+TMP_SYMM)
-        with open(TMP_SYMM) as f:
-            self["sym_ops"] = int(f.read().split()[1])
-
-        # Work out the space group
-        os.system("c2x --int "+TMP_CELL+" 2>"+TMP_SYMM)
-        with open(TMP_SYMM) as f:
-            self["space_group_name"] = f.read().split()[-1]
-
-        # Remove temporary files
-        os.system("rm "+TMP_CELL+" "+TMP_SYMM)
-        time.sleep(0.25) # Wait for filesystem to catch up
 
     # Save the geometry to a CASTEP .cell file
     def save_to_cell(self, filename):
