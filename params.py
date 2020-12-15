@@ -787,7 +787,13 @@ class parameters:
                 if p == "lattice":     continue
                 if p == "pseudo_dirs": continue
 
-                f.write("{0} {1}\n".format(p, self.par[p]))
+                val = self.par[p]
+
+                # Space-seperated list formatting
+                if isinstance(val, list):
+                    val = " ".join(str(x) for x in val)
+
+                f.write("{0} {1}\n".format(p, val))
 
     # Load parameter set from file
     def load(self, filename):
