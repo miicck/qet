@@ -404,3 +404,44 @@ class phonon_interp_dos_out(output_file):
         self["dos"] = data[1]
         for i in range(2, len(data)):
             self["pdos_{0}".format(i-1)] = data[2]
+
+
+class phonon_interp_modes(output_file):
+    
+    def parse(self, filename):
+
+        freqs = []
+        evecs = []
+        qpts  = []
+
+        with open(filename) as f:
+            for line in f:
+                line = line.strip()
+
+                if line.startswith("("):
+                    # parse eigenvector for this atom
+                    line = line.replace("(", "").replace(")", "")
+                    x = [float(w) for i, w in enumerate(line.split()) if i % 2 == 0]
+                    evecs[len(freqs)-1].append(x)
+                    continue
+
+                if line.startswith("freq"):
+                    # parse mode frequency in cm^-1
+                    w = float(line.split("=")[-1].split("[")[0])
+                    freqs.append(w)
+
+                    # Excend eigenvector array to accomodate
+                    # eigenvector that we're expecting
+                    evecs.append([])
+                    continue
+
+                if line.startswith("q ="):
+                    # Parse q-point coordinates
+                    q = [float(x) for x in line.replace("q =", "").split()]
+                    qpts.append(q)
+                    continue
+
+        # Record the info
+        self["q-points"]     = qpts
+        self["frequencies"]  = freqs
+        self["eigenvectors"] = evecs

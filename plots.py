@@ -441,33 +441,16 @@ def plot_phonon_dispersion(filename="./ph_interp.freq"):
 def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
     import matplotlib.pyplot as plt
     import numpy as np
-    
-    freqs = []
-    evecs = []
-    with open(filename) as f:
-        for line in f:
-            line = line.strip()
 
-            if line.startswith("("):
-                # parse eigenvector for this atom
-                line = line.replace("(", "")
-                line = line.replace(")", "")
-                x = [float(w) for w in line.split()]
+    # Parse the phonon mode frequencies and atom-resolved
+    # magnitudes of the corresponding eigenvectors.
+    modulus = lambda v : (v[0]*v[0] + v[1]*v[1] + v[2]*v[2])**0.5
+    modes = parser.phonon_interp_modes(filename)
+    freqs = modes["frequencies"]
+    evecs = [[modulus(x) for x in ev] for ev in modes["eigenvectors"]]
 
-                # Record it's magnitude
-                x = (x[0]*x[0] + x[2]*x[2] + x[4]*x[4])**0.5
-                evecs[len(freqs)-1].append(x)
-                continue
-
-            if line.startswith("freq"):
-                # parse mode frequency in cm^-1
-                w = float(line.split("=")[-1].split("[")[0])
-                freqs.append(w)
-                evecs.append([])
-                continue
-
+    # Bin the atom-resolved displacement vs frequency of the phonons
     BINS = 1000
-
     minf  = min(freqs)
     maxf  = max(freqs)
     atoms = len(evecs[0])

@@ -520,8 +520,11 @@ class parameters:
     # For a wavevector k_p in the B.Z of this crystal, returns 
     # a supercell of this crystal for which the wavevector
     # folds back to the gamma point (i.e returns a supercell
-    # that can support explicit pertubations with wavevector k)
-    def generate_commensurate_supercell(self, k_p):
+    # that can support explicit pertubations with wavevector k_p).
+    # If apply_eigenvector is set, and has dimensions 
+    # #atoms x 3, then a phonon mode of the form eigenvector * cos(k_p dot R)
+    # will be applied to the resulting structure.
+    def generate_commensurate_supercell(self, k_p, apply_eigenvector=None):
         import math
         import numpy as np
         from fractions import Fraction
@@ -600,11 +603,11 @@ class parameters:
 
         superlat_inv = np.linalg.inv(np.array(ss_lat).T)
         max_delta = max(ss)*4
-        frac_eps  = 10e-4
+        frac_eps  = 1e-4
         ss_atoms  = []
 
         # Work out where the atoms go in the supercell
-        for a in self["atoms"]:
+        for ai, a in enumerate(self["atoms"]):
 
             # The position of the atom in the first unit cell in cartesians
             cart_pos = a[1][0]*lat[0]+a[1][1]*lat[1]+a[1][2]*lat[2]
@@ -616,7 +619,13 @@ class parameters:
 
                         # The position of the image of the atom in cartesians
                         # and in fractional supercell coordinates
-                        image_pos    = cart_pos + dx*lat[0] + dy*lat[1] + dz*lat[2]
+                        image_pos = cart_pos + dx*lat[0] + dy*lat[1] + dz*lat[2]
+
+                        # Apply phonon pertubation if eigenvector is provided
+                        if not apply_eigenvector is None:
+                            phase      = np.cos(np.dot(k_p, [dx+a[1][0], dy+a[1][1], dz+a[1][2]])*np.pi*2)
+                            image_pos += phase * np.array(apply_eigenvector[ai]) 
+
                         frac_pos_sup = np.dot(superlat_inv, image_pos)
 
                         # If x is in the first supercell, add it to the supercell atoms
@@ -634,6 +643,49 @@ class parameters:
             raise Exception("Supercell does not contain the correct number of atoms!")
 
         return sup
+
+    # Apply a phonon of the given wavevector (q) and amplitude (amp).
+    # Returns a parameters object describing the perturbed cell
+    def apply_phonon(self, q, mode, amp, modes_file="ph_interp.modes", use_closest=False):
+
+        # Parse the modes file for the eigenvectors
+        from qet.parser import phonon_interp_modes
+        modes = phonon_interp_modes(modes_file)
+
+        qpts  = modes["q-points"]
+        evecs = modes["eigenvectors"]
+
+        # Find the closest q-point to the requested one
+        disp = lambda q1, q2 : sum((q1[i]-q2[i])*(q1[i]-q2[i]) for i in range(3))
+
+        min_disp = float("inf")
+        min_i    = None
+        for i in range(len(qpts)):
+            
+            d = disp(qpts[i], q)
+            if d < min_disp:
+                min_disp = d
+                min_i = i
+
+        # Error out if we are not using the closest q-point to that specified
+        if not use_closest:
+            if min_disp > 10e-6:
+                fs  = "Could not find modes for the q-point {0}, the closest was "
+                fs += "{1}. Set use_closest=True to approximate the eigenvector at {0} "
+                fs += "with the eigenvector at {1}."
+                raise Exception(fs.format(q, qpts[min_i]))
+        
+        # Find the eigenvector corresponding to the 
+        # requested (q-point, mode) combination
+        modes_per_q = int(len(evecs)/len(qpts))
+        if mode < 0 or mode >= modes_per_q:
+            raise Exception("Mode index {0} is out of range!".format(mode))
+
+        evec = evecs[min_i*modes_per_q+mode]
+        if modes_per_q != len(evec)*3:
+            raise Exception("#modes != #atoms * 3")
+
+        return self.generate_commensurate_supercell(q, apply_eigenvector=evec)
 
 
     ####################
