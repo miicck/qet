@@ -55,7 +55,7 @@ def h_dos(structure):
     return hydrogen_dos/total_dos
 ```
 
-This function takes an argument `strcuture` which will be of the `parameters` type defined in `qet.params`. This
+This function takes an argument `structure` which will be of the `parameters` type defined in `qet.params`. This
 `parameters` object defines all of the various settings used by Quantum Espresso, including the crystal structure
 of the material in question. It's state is defined by a minimal structure and parameter set and it exposes many useful
 methods for accessing that information and derived information. Using these methods, we setup a constaint on the 
