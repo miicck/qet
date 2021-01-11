@@ -642,6 +642,10 @@ class parameters:
         if len(self["atoms"])*lcm != len(sup["atoms"]):
             raise Exception("Supercell does not contain the correct number of atoms!")
 
+        self.eval_symmetry()
+        sup.eval_symmetry()
+        print("Symmetry before: {0} Symmetry after: {1}".format(self["space_group_name"], sup["space_group_name"]))
+
         return sup
 
     # Apply a phonon of the given wavevector (q) and amplitude (amp).

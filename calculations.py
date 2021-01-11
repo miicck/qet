@@ -219,6 +219,12 @@ class calculation:
         s  = self.default_filename()+".in:\n"
         s += self.gen_input_file()
         return s
+
+    # Should return true if image-based parallelization is
+    # allowed for this calculation type (q.e will error out
+    # if this isn't correct for the exe)
+    def image_parallelization_allowed(self):
+        return False
     
     # Run the calculation in the given directory
     # with the given name, will check if the
@@ -263,9 +269,14 @@ class calculation:
             ppn = self.in_params["cores_per_node"]
 
             # Setup parallelism scheme
-            pools  = self.in_params["pools"]
-            images = self.in_params["images"]
-            qe_flags = "-nk {0} -ni {1}".format(pools, images) 
+            if self.image_parallelization_allowed():
+                # Use k-point/image parallelism
+                pools  = self.in_params["pools"]
+                images = self.in_params["images"]
+                qe_flags = "-nk {0} -ni {1}".format(pools, images) 
+            else:
+                # Just use k-point parallelism
+                qe_flags = "-nk {0}".format(np)
 
             # Apply overriden q-e location
             bin = self.in_params["path_override"]
@@ -485,6 +496,10 @@ class phonon_grid(calculation):
     def default_filename(self):
         return "phonons"
 
+    # Images are allowed for phonon calculations
+    def image_parallelization_allowed(self):
+        return True
+
     # Parse calculation output
     def parse_output(self, outf):
         return parser.phonon_grid_out(outf)
@@ -521,6 +536,10 @@ class electron_phonon_grid(calculation):
     # The default filename for calculations of this type
     def default_filename(self):
         return "elph"
+
+    # Images are allowed for phonon calculations
+    def image_parallelization_allowed(self):
+        return True
 
     # Parse calculation output
     def parse_output(self, outf):
@@ -564,6 +583,10 @@ class q2r(calculation):
     def default_filename(self):
         return "q2r"
 
+    # Images are allowed for phonon calculations
+    def image_parallelization_allowed(self):
+        return True
+
     # Parse calculation output
     def parse_output(self, outf):
         return None
@@ -592,6 +615,10 @@ class interpolate_phonon(calculation):
     def default_filename(self):
         return self.in_params["ph_interp_prefix"]
 
+    # Images are allowed for phonon calculations
+    def image_parallelization_allowed(self):
+        return True
+
     # Parse calculation output
     def parse_output(self, outf):
         return None
@@ -615,6 +642,12 @@ class interpolate_phonon(calculation):
         s += "/\n"
 
         return pad_input_file(s)
+
+
+#########################
+# END CALCULATION TYPES #
+#########################
+
 
 # Calculate Tc using the allen-dynes equation from
 # a given a2f(frequency)
