@@ -368,6 +368,24 @@ def plot_a2f(filename="./a2F.dos1"):
     # Show the plot
     plt.show()
 
+def plot_a2fs(filenames=[]):
+    import matplotlib.pyplot as plt
+    
+    for f in filenames:
+        out = parser.a2f_dos_out(f)
+        ws  = out["frequencies"] 
+        ws  = [w*constants.RY_TO_CMM1 for w in ws]
+        a2f = out["a2f"]
+        was = [[w,a] if (w > 0 and a > 0) else [w,0] for w,a in zip(ws, a2f)]
+        ws, a2fs = zip(*was)
+
+        plt.fill_between(ws, 0, a2fs, alpha=0.5, label=f)
+
+    plt.ylabel("$\\alpha^2F(\\omega)$")
+    plt.xlabel("Phonon frequency $(\\omega, cm^{-1})$")
+    plt.legend()
+    plt.show()
+
 # Returns the squared distnace between two points
 # in reciprocal space, including folding
 def delta_q(q, p):
@@ -671,6 +689,7 @@ def main():
         "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq),
         "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
         "a2f"               : lambda : plot_a2f(sys.argv[2]),
+        "a2fs"              : lambda : plot_a2fs(sys.argv[2:]),
         "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"          : lambda : plot_proj_dos(),
         "proj_dos_h"        : lambda : plot_h_derived_dos(),
@@ -678,7 +697,7 @@ def main():
         "pdos"              : lambda : plot_pdos(),
         "ebands"            : lambda : plot_ebands(),
         "phonon_atoms"      : lambda : plot_phonon_mode_atoms(),
-        "phonon_dispersion" : lambda : plot_phonon_dispersion()
+        "phonon_dispersion" : lambda : plot_phonon_dispersion(),
     }
 
     # Check arguments

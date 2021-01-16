@@ -54,8 +54,8 @@ class output_file:
 
         if not key in self.dict:
             # Raise error if key not found
-            msg = "Key {0} not found in output file {1}."
-            msg = msg.format(key, self)
+            msg = "Key {0} not found in output file."
+            msg = msg.format(key)
             raise ValueError(msg)
 
         return self.dict[key]
