@@ -821,6 +821,10 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
             f.write("{0} +/- {1} K (Eliashberg)\n".format(tc, err))
             f.write("{0} K (Allen-Dynes)\n".format(tc_ad[mu]))
 
+        # Tidy some of the larger files up
+        os.system("rm "+mu_dir+"/ELIASHBERG_GAP_RA.OUT")
+        os.system("rm "+mu_dir+"/ELIASHBERG_Z_RA.OUT")
+
     return tc_eliashberg
 
 # List all files in the given folder or subdirectories of it
