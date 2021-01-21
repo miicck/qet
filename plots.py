@@ -544,6 +544,13 @@ def plot_tc_vs_smearing(directories=["./"],
     if len(directories) == 0:
         print("No directories to plot in tc_vs_smearing!")
         return
+
+    # Sort directories into decreasing k-point grid 
+    # size so the first grid is the densest
+    def sort_key(direc):
+        try: return -int(direc.split("_")[-1])
+        except: return 0
+    directories.sort(key=sort_key)
     
     if ask:
         txt = input("Would you like to plot {0} (n to skip)?".format(directories[0]))
