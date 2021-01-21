@@ -527,7 +527,7 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
 
 def plot_tc_vs_smearing(directories=["./"], 
     force_allen_dynes=False, ask=False, plot_relative=False, 
-    plot_over_1000=False, attenuation_freq=None):
+    plot_over_1000=False, attenuation_freq=None, show=True):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     if not attenuation_freq is None:
@@ -671,7 +671,14 @@ def plot_tc_vs_smearing(directories=["./"],
             plt.ylim([-10,1000])
 
     plt.legend()
-    plt.show()
+    if show: plt.show()
+
+def plot_tc_vs_smearing_both(directories=[], plot_relative=False):
+    import matplotlib.pyplot as plt
+    plt.subplot(211)
+    plot_tc_vs_smearing(directories, force_allen_dynes=True, plot_relative=plot_relative, show=False)
+    plt.subplot(212)
+    plot_tc_vs_smearing(directories, plot_relative=plot_relative)
 
 def plot_alch_network(directory=None):
     from qet.alchemy.network import plot_alch_network
@@ -693,18 +700,19 @@ def main():
 
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"    : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq),
-        "tc_vs_smearing_ad" : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
-        "a2f"               : lambda : plot_a2f(sys.argv[2]),
-        "a2fs"              : lambda : plot_a2fs(sys.argv[2:]),
-        "alch_network"      : lambda : plot_alch_network(sys.argv[2]),
-        "proj_dos"          : lambda : plot_proj_dos(),
-        "proj_dos_h"        : lambda : plot_h_derived_dos(),
-        "rank_doping"       : lambda : rank_doping(sys.argv[2:]),
-        "pdos"              : lambda : plot_pdos(),
-        "ebands"            : lambda : plot_ebands(),
-        "phonon_atoms"      : lambda : plot_phonon_mode_atoms(),
-        "phonon_dispersion" : lambda : plot_phonon_dispersion(),
+        "tc_vs_smearing"      : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq),
+        "tc_vs_smearing_ad"   : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
+        "tc_vs_smearing_both" : lambda : plot_tc_vs_smearing_both(sys.argv[2:], plot_relative=rel),
+        "a2f"                 : lambda : plot_a2f(sys.argv[2]),
+        "a2fs"                : lambda : plot_a2fs(sys.argv[2:]),
+        "alch_network"        : lambda : plot_alch_network(sys.argv[2]),
+        "proj_dos"            : lambda : plot_proj_dos(),
+        "proj_dos_h"          : lambda : plot_h_derived_dos(),
+        "rank_doping"         : lambda : rank_doping(sys.argv[2:]),
+        "pdos"                : lambda : plot_pdos(),
+        "ebands"              : lambda : plot_ebands(),
+        "phonon_atoms"        : lambda : plot_phonon_mode_atoms(),
+        "phonon_dispersion"   : lambda : plot_phonon_dispersion(),
     }
 
     # Check arguments
