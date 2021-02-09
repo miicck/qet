@@ -652,7 +652,7 @@ class interpolate_phonon(calculation):
 # Calculate Tc using the allen-dynes equation from
 # a given a2f(frequency)
 def tc_allen_dynes(frequencies, a2f, mu_stars=[0.1, 0.15],
-    attenuation_freq=None):
+    attenuation_freq=None, get_lambda=False):
     import numpy         as     np
     from   qet.constants import RY_TO_K
 
@@ -670,7 +670,10 @@ def tc_allen_dynes(frequencies, a2f, mu_stars=[0.1, 0.15],
 
     # Use the allen-dynes equation to estimate Tc
     lam  = np.trapz([2*a/w for w, a in wa], x=ws)
-    if lam < 10e-10: return tc_ad
+    if lam < 10e-10: 
+        if get_lambda: 
+            return tc_ad, lam
+        return tc_ad
 
     wlog = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=ws))
     wrms = ((2/lam)*np.trapz([a*w for w, a in wa], x=ws))**0.5
@@ -682,30 +685,101 @@ def tc_allen_dynes(frequencies, a2f, mu_stars=[0.1, 0.15],
         f2 = 1 + (wrms/wlog - 1) * (lam**2) / (lam**2 + g2**2)
         tc_ad[mu] = RY_TO_K*f1*f2*(wlog/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
 
+    if get_lambda: 
+        return tc_ad, lam
     return tc_ad
     
 # For a given a2f.dos file, calculate Tc for
 # each of the given mu* values, using the allen-dynes
 # equation
 def tc_from_a2f_allen_dynes(filename, mu_stars=[0.1, 0.15],
-    attenuation_freq=None):
+    attenuation_freq=None, get_lambda=False):
 
     # Parse the a2f file, ignore negative frequencies/elishberg function
     out = parser.a2f_dos_out(filename)
 
     return tc_allen_dynes(out["frequencies"], out["a2f"], 
-        mu_stars=mu_stars, attenuation_freq=attenuation_freq)
+        mu_stars=mu_stars, attenuation_freq=attenuation_freq, get_lambda=get_lambda)
+
+def tc_from_gap_function(filename, plot=False): 
+    from   scipy.optimize import curve_fit
+    import numpy          as     np
+
+    # Parse the superconducting gap vs temperature
+    ts = []
+    gs = []
+    with open(filename) as f:
+        for l in f:
+            vals = [float(w) for w in l.split()]
+            if len(vals) != 3: continue
+            ts.append(vals[0])
+            gs.append(vals[1]/vals[2])
+
+    # Interpolate g(t) data to a finer grid
+    ts_interp = np.linspace(min(ts), max(ts), len(ts)*5)
+    gs_interp = [np.interp(t, ts, gs) for t in ts_interp]
+    ts = ts_interp
+    gs = gs_interp
+
+    # Guess tc from just above where gap first goes above
+    # 5% of the maximum on decreasing Tc
+    tc_guess = 0
+    for i in range(len(ts)-1, -1, -1):
+        if gs[i] > 0.05 * max(gs): break
+        tc_guess = ts[i]
+
+    def gap_model(t, tc, gmax):
+        t = np.array([min(ti, tc) for ti in t])
+        return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
+
+    try:
+        p0 = [tc_guess, max(gs)*2]
+        par, cov = curve_fit(gap_model, ts, gs, p0)
+    
+        if plot:
+            import matplotlib.pyplot as plt
+            plt.plot(ts, gs, marker="+", label="data")
+            plt.plot(ts, gap_model(ts, *par), marker="+", label="fit")
+            plt.axvline(par[0], color="black", linestyle=":", label="Tc = "+str(par[0]))
+            plt.legend()
+            plt.show()
+
+    except Warning as warn:
+        log("Gap function fit failed with warning:", "tc.log")
+        log(str(warn), "tc.log")
+        par = [0, p0[1]]
+        cov = float("inf")
+    except Exception as err:
+        log("Gap function fit failed with error:", "tc.log")
+        log(str(err), "tc.log")
+        raise err
+
+    if np.isfinite(cov).all():
+        tc  = par[0]
+        err = cov[0][0]**0.5
+    else:
+        log("Tc covariance is infinite!", "tc.log")
+        tc  = tc_guess
+        err = float("inf")
+
+    return tc, err
 
 # Calculate TC by solving the eliashberg equations (requires elk)
 def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
+    out = parser.a2f_dos_out(filename)
+    wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
+    ws  = [w for w,a in wa]
+    a2f = [a for w,a in wa]
+    dosn = filename.split("dos")[-1]
+    tc_dir = os.path.basedir(filename)+ "/tc_dos_" + dosn
+    return tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=mu_stars, force=force)
+
+# Calculate TC by solving the eliashberg equations (requires elk)
+def tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=[0.1, 0.15], force=False):
     import warnings
-    import numpy          as     np
-    from   scipy.optimize import curve_fit
-    from   subprocess     import check_output
+    from   subprocess import check_output
 
     # Get the smearing number, make a corresponding tc directory
-    dosn = filename.split("dos")[-1]
-    tc_dir = os.path.dirname(filename) + "/tc_dos_" + dosn
     if os.path.isdir(tc_dir):
         if force: os.system("rm -r "+tc_dir)
         else:
@@ -730,21 +804,13 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
 
     os.system("mkdir "+tc_dir)
 
-    # raise warnings as exceptions
-    warnings.filterwarnings("error") 
-
     # First, estimate Tc using the allen-dynes equation
-    tc_ad = tc_from_a2f_allen_dynes(filename, mu_stars=mu_stars)
+    tc_ad = tc_allen_dynes(ws,a2f,mu_stars=mu_stars)
     
     # Find the elk species directory
     elk_base_dir = check_output(["which", "elk"])
     elk_base_dir = elk_base_dir.decode("utf-8").replace("src/elk\n","")
     species_dir  = elk_base_dir + "/species/"
-
-    # Parse a2F(w), ignoring negative w and negative a2F
-    out = parser.a2f_dos_out(filename)
-    wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
-    ws  = [w for w,a in wa]
 
     tc_eliashberg = {}
     for mu in mu_stars:
@@ -755,16 +821,16 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
 
         # Create elk a2F input file
         with open(mu_dir+"/ALPHA2F.OUT", "w") as f:
-            for w, a in wa:
-                w *= 0.5 # Convert Ry to Ha
-                f.write("{0} {1}\n".format(w,a))
+            for i in range(len(ws)):
+                # Convert Ry to Ha
+                f.write("{0} {1}\n".format(ws[i]*0.5,a2f[i]))
 
         # Create elk input file
         # A lot of the parameters are not actually needed
         # but are neccassary to allow elk to start up
         with open(mu_dir+"/elk.in", "w") as f:
             f.write("tasks\n260\n\nntemp\n20\nmustar\n{0}\n".format(mu))
-            f.write("\nwplot\n{0} {1} {2}\n-0.5 0.5\n".format(len(wa), 1, 1))
+            f.write("\nwplot\n{0} {1} {2}\n-0.5 0.5\n".format(len(ws), 1, 1))
             f.write("sppath\n'{0}'\n".format(species_dir))
             f.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
             f.write("avec\n1 0 0\n0 1 0\n0 0 1")
@@ -772,48 +838,7 @@ def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
         # Run elk
         os.system("cd {0}; elk > /dev/null".format(mu_dir))
 
-        # Parse the superconducting gap vs temperature
-        ts = []
-        gs = []
-        with open(mu_dir+"/ELIASHBERG_GAP_T.OUT") as f:
-            for l in f:
-                vals = [float(w) for w in l.split()]
-                if len(vals) != 3: continue
-                ts.append(vals[0])
-                gs.append(vals[1]/vals[2])
-
-        # Guess tc from where gap first goes above
-        # 5% of the maximum on decreasing Tc
-        tc_guess = 0
-        for i in range(len(ts)-1, -1, -1):
-            tc_guess = ts[i]
-            if gs[i] > 0.05 * max(gs): break
-
-        def gap_model(t, tc, gmax):
-            t = np.array([min(ti, tc) for ti in t])
-            return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
-
-        try:
-            p0 = [tc_guess, max(gs)]
-            par, cov = curve_fit(gap_model, ts, gs, p0)
-        except Warning as warn:
-            log("Gap function fit failed with warning:", "tc.log")
-            log(str(warn), "tc.log")
-            par = [0, p0[1]]
-            cov = float("inf")
-        except Exception as err:
-            log("Gap function fit failed with error:", "tc.log")
-            log(str(err), "tc.log")
-            raise err
-
-        if np.isfinite(cov).all():
-            tc  = par[0]
-            err = cov[0][0]**0.5
-        else:
-            log("Tc covariance is infinite!", "tc.log")
-            tc  = tc_guess
-            err = float("inf")
-
+        tc, err = tc_from_gap_function(mu_dir+"/ELIASHBERG_GAP_T.OUT")
         tc_eliashberg[mu] = tc
 
         # Save the result

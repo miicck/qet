@@ -205,6 +205,7 @@ class extract_bands_out(output_file):
                     if len(next) > 0:
                         bands.append(next)
                         next = []
+                        continue
 
                 next.extend(float(w) for w in splt)
 

@@ -42,10 +42,20 @@ def plot_dos(filename="./dos.out"):
 # the given .dos file
 def plot_pdos(filename="./ph_interp.dos"):
     import matplotlib.pyplot as plt
+    import numpy as np
     
+    # Parse DOS file
     out = parser.phonon_interp_dos_out(filename)
+
+    # Work out average frequency
+    freqs     = out["frequencies"]
+    dos_norm  = np.array(out["dos"])
+    dos_norm /= np.trapz(dos_norm, x=freqs)
+    av_freq = np.trapz([f*d for f,d in zip(freqs, dos_norm)], x=freqs)
+
+    # Plot DOS
     plt.plot(out["frequencies"], out["dos"])
-    plt.xlabel("Frequency (cm$^{-1}$)")
+    plt.xlabel("Frequency (cm$^{-1}$)\naverage = "+str(av_freq))
     plt.ylabel("Phonon DOS")
     plt.show()
 
@@ -301,8 +311,11 @@ def plot_ebands(filename="./e_bands.in"):
 
     out = parser.extract_bands_out(filename)
     bands = zip(*out["bands"])
+    i = 0
     for b in bands:
-        plt.plot([x - e_fermi for x in b], marker="+", linestyle="none")
+        plt.plot([x - e_fermi for x in b])
+        i = i+1
+    print("Plotting {0} bands".format(i))
 
     for i in labels:
         plt.axvline(i, color="black", linestyle=":")
@@ -311,7 +324,7 @@ def plot_ebands(filename="./e_bands.in"):
 
     plt.show()
 
-def plot_a2f(filename="./a2F.dos1"):
+def plot_a2f(filename="./a2F.dos1", safe=False):
     import matplotlib.pyplot as plt
     from qet.calculations import tc_from_a2f_allen_dynes, tc_allen_dynes
     
@@ -333,7 +346,14 @@ def plot_a2f(filename="./a2F.dos1"):
         # Get this constribution and the cumulative total
         a2f_mode = out["a2f_mode_{0}".format(i_mode)]
         if total is None: total = [0.0 for a in a2f_mode]
-        new_total = [t+a for t,a in zip(total, a2f_mode)]
+        ta_func = lambda t,a : t+a
+        if safe: ta_func = lambda t,a : max(t+a,0)
+        new_total = [ta_func(t,a) for t,a in zip(total, a2f_mode)]
+
+        if safe:
+            for i in range(0, len(ws)):
+                if ws[i] < 0:
+                    new_total[i] = 0
 
         # Fill in this contribution
         plt.fill_between(ws, total, new_total)
@@ -527,7 +547,8 @@ def plot_phonon_mode_atoms(filename="./ph_interp.modes"):
 
 def plot_tc_vs_smearing(directories=["./"], 
     force_allen_dynes=False, ask=False, plot_relative=False, 
-    plot_over_1000=False, attenuation_freq=None, show=True):
+    plot_over_1000=False, attenuation_freq=None, show=True, mu_stars=[0.1, 0.15], 
+    plot_lambda=False):
     from qet.calculations import tc_from_a2f_allen_dynes
 
     if not attenuation_freq is None:
@@ -569,6 +590,13 @@ def plot_tc_vs_smearing(directories=["./"],
     if plot_relative:
         print("Plotting relative")
     tc_rel = None
+    lam_rel = None
+
+    if plot_lambda:
+        tc_plot = plt.subplot(211)
+        lam_plot= plt.subplot(212)
+    else:
+        tc_plot = plt.subplot(111)
 
     # Will contain the method used to evaluate Tc
     method = "None"
@@ -580,7 +608,6 @@ def plot_tc_vs_smearing(directories=["./"],
 
         tcs1 = []
         tcs2 = []
-
         method = "Allen-Dynes"
 
         # Loop over a2f.dos files
@@ -593,8 +620,16 @@ def plot_tc_vs_smearing(directories=["./"],
             elk_dir = directory + "/tc_dos_{0}".format(n)
             if os.path.isdir(elk_dir) and not force_allen_dynes:
 
-                method = "Eliashberg"
+                # Work out lambdas/allen dynes Tc
+                tcs_ad, lam = tc_from_a2f_allen_dynes(f, mu_stars=mu_stars, get_lambda=True)
+
+                if method != "Eliashberg":
+                    method = "Eliashberg"
+                    mu_stars = []
+
                 for mu_dir in os.listdir(elk_dir):
+                    mu = float(mu_dir.split("_")[-1])
+                    mu_stars.append(mu)
                     mu_dir = elk_dir + "/" + mu_dir
                     tc_f   = mu_dir + "/tc.out"
                     if not os.path.isfile(tc_f): continue
@@ -603,8 +638,8 @@ def plot_tc_vs_smearing(directories=["./"],
                         for line in f:
                             if "liashberg" in line:
                                 tc = float(line.split()[0])
-                                if len(tcs1) == len(tcs2): tcs1.append([n, tc])
-                                else: tcs2.append([n, tc])
+                                if len(tcs1) == len(tcs2): tcs1.append([n, tc, lam])
+                                else: tcs2.append([n, tc, lam])
 
             # No elk directory, calculate using allen-dynes
             else:
@@ -614,12 +649,12 @@ def plot_tc_vs_smearing(directories=["./"],
 
                 try:
                     # Get tc for two different mu* values
-                    tcs = tc_from_a2f_allen_dynes(f, mu_stars=[0.1, 0.15], 
-                        attenuation_freq=attenuation_freq)
-                    tcs1.append([n, tcs[0.1]])
-                    tcs2.append([n, tcs[0.15]])
+                    tcs, lam = tc_from_a2f_allen_dynes(f, mu_stars=mu_stars, 
+                        attenuation_freq=attenuation_freq, get_lambda=True)
+                    tcs1.append([n, tcs[mu_stars[0], lam]])
+                    tcs2.append([n, tcs[mu_stars[1], lam]])
                 except Exception as e:
-                    print(e)
+                    print("Exception in Allen-Dynes  TC: "+str(e))
                     continue
 
         # No data => skip
@@ -631,8 +666,8 @@ def plot_tc_vs_smearing(directories=["./"],
         tcs1.sort()
         tcs2.sort()
 
-        ns, tc1 = zip(*tcs1)
-        ns, tc2 = zip(*tcs2)
+        ns, tc1, lam1 = zip(*tcs1)
+        ns, tc2, lam2 = zip(*tcs2)
 
         # Attempt to find el_ph_sigma in .in files
         el_ph_sigma = None
@@ -655,14 +690,24 @@ def plot_tc_vs_smearing(directories=["./"],
 
         if plot_relative and tc_rel is None:
             tc_rel = tc1[-1]
+            lam_rel = lam1[-1]
         elif not (tc_rel is None):
-            diff = tc1[-1] - tc_rel
-            tc1 = [t1 - diff for t1 in tc1]
-            tc2 = [t2 - diff for t2 in tc2]
+            diff    = tc1[-1] - tc_rel
+            difflam = lam1[-1] - lam_rel
+            tc1     = [t1 - diff for t1 in tc1]
+            tc2     = [t2 - diff for t2 in tc2]
+            lam1    = [l1 - difflam for l1 in lam1]
+            lam2    = [l2 - difflam for l2 in lam2]
 
-        plt.fill_between(ns, tc1, tc2, alpha=0.25, label=directory) 
-        plt.plot(ns, tc2, linestyle="none", marker="+")
-        plt.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [0.1, 0.15]$)".format(method))
+        tc_plot.fill_between(ns, tc1, tc2, alpha=0.25, label=directory) 
+        tc_plot.plot(ns, tc2, linestyle="none", marker="+")
+        tc_plot.set_ylabel("$T_C$ ({0} with $\\mu^* \\in \; [{1}, {2}]$)".format(method, *mu_stars))
+        tc_plot.legend()
+
+        if not lam_plot is None:
+            lam_plot.plot(ns, lam1, label=directory)
+            lam_plot.set_ylabel("$\lambda$")
+            lam_plot.legend()
 
     if not plot_over_1000:
         if plt.ylim()[1] > 1000.0:
@@ -673,37 +718,128 @@ def plot_tc_vs_smearing(directories=["./"],
     plt.legend()
     if show: plt.show()
 
-def plot_tc_vs_smearing_both(directories=[], plot_relative=False):
+def plot_tc_vs_smearing_both(directories=[], plot_relative=False, mu_stars=[0.1,0.15]):
     import matplotlib.pyplot as plt
     plt.subplot(211)
-    plot_tc_vs_smearing(directories, force_allen_dynes=True, plot_relative=plot_relative, show=False)
+    plot_tc_vs_smearing(directories, force_allen_dynes=True, plot_relative=plot_relative, show=False, mu_stars=mu_stars)
     plt.subplot(212)
-    plot_tc_vs_smearing(directories, plot_relative=plot_relative)
+    plot_tc_vs_smearing(directories, plot_relative=plot_relative, mu_stars=mu_stars)
 
 def plot_alch_network(directory=None):
     from qet.alchemy.network import plot_alch_network
     plot_alch_network(directory=directory, pickle=False)
 
+def plot_cube_file(filename="density.cub"):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    vol_data = []
+    atoms = 0
+    with open(filename) as f:
+        i = 0
+        for line in f:
+
+            # Parse atom count on line 2
+            if   i == 2: 
+                atoms = int(line.split()[0])
+
+            # Parse grid info on lines 3,4,5
+            elif i == 3: 
+                x_grid = int(line.split()[0])
+                x_vec  = [float(x) for x in line.split()[1:]]
+            elif i == 4: 
+                y_grid = int(line.split()[0])
+                y_vec  = [float(x) for x in line.split()[1:]]
+            elif i == 5: 
+                z_grid = int(line.split()[0])
+                z_vec  = [float(x) for x in line.split()[1:]]
+
+            # Parse volumetric data
+            elif i > 5 + atoms:
+                vol_data.extend([float(x) for x in line.split()])
+
+            i = i + 1
+
+    if len(vol_data) != x_grid*y_grid*z_grid:
+        raise Exception("Volumetric data size does not match grid size in .cub file!")
+
+    print("Cube file with {0} atoms on a {1}x{2}x{3} grid found".format(atoms, x_grid, y_grid, z_grid))
+    print("{0} volumetric datapoints found".format(len(vol_data)))
+
+    def get_val_from_frac(x,y,z):
+        # Convert from fractional coords to grid coord
+        i = z*(z_grid-1) + y*(y_grid-1)*z_grid + x*(x_grid-1)*y_grid*z_grid
+        return vol_data[int(i)]
+
+    RES = 1000
+    bins = np.zeros((RES,RES))
+    for i, xf in enumerate(np.linspace(0,1,RES)):
+        for j, yf in enumerate(np.linspace(0,1,RES)):
+            bins[i,j] = get_val_from_frac(xf,yf,0.5)
+            
+    plt.imshow(bins)
+    plt.show()
+
+def plot_2d_density(files=["density.out"]):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+
+    
+    n = int(len(files)**0.5)+1
+    gs = gridspec.GridSpec(n, n)
+    gs.update(wspace=0, hspace=0)
+
+    nplot = 0
+    for filename in files:
+        
+        ds = []
+        with open(filename) as f:
+           for line in f:
+               try: ds.append(float(line))
+               except: pass
+
+        n = int(len(ds)**0.5)
+        grid = np.zeros((n,n))
+        for i in range(0,n):
+            for j in range(0,n):
+                grid[i,j] = ds[i+n*j]
+
+        plt.subplot(gs[nplot])
+        nplot += 1
+        plt.imshow(grid)
+
+    plt.show()
+
 # Run like a program
 def main():
     import sys
 
-    ask = "ask" in sys.argv
-    rel = "rel" in sys.argv
+    ask   = "ask" in sys.argv
+    rel   = "rel" in sys.argv
+    safe  = "safe" in sys.argv
     p1000 = "plot_1000" in sys.argv
 
     att_freq = None
+    mu_stars = [0.1, 0.15]
     for a in sys.argv[2:]:
+
         if a.startswith("att_freq="):
             att_freq = float(a.split("=")[-1])
             break
 
+        if a.startswith("mu_stars="):
+            mu_stars = [float(x) for x in a.split("=")[-1].split(",")]
+            break
+
+
+
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"      : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq),
+        "tc_vs_smearing"      : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq, plot_lambda=True),
         "tc_vs_smearing_ad"   : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
-        "tc_vs_smearing_both" : lambda : plot_tc_vs_smearing_both(sys.argv[2:], plot_relative=rel),
-        "a2f"                 : lambda : plot_a2f(sys.argv[2]),
+        "tc_vs_smearing_both" : lambda : plot_tc_vs_smearing_both(sys.argv[2:], plot_relative=rel, mu_stars=mu_stars),
+        "a2f"                 : lambda : plot_a2f(sys.argv[2], safe=safe),
         "a2fs"                : lambda : plot_a2fs(sys.argv[2:]),
         "alch_network"        : lambda : plot_alch_network(sys.argv[2]),
         "proj_dos"            : lambda : plot_proj_dos(),
@@ -713,6 +849,8 @@ def main():
         "ebands"              : lambda : plot_ebands(),
         "phonon_atoms"        : lambda : plot_phonon_mode_atoms(),
         "phonon_dispersion"   : lambda : plot_phonon_dispersion(),
+        "cube_file"           : lambda : plot_cube_file(),
+        "2d_density"          : lambda : plot_2d_density(sys.argv[2:]),
     }
 
     # Check arguments
