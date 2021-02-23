@@ -642,6 +642,7 @@ class parameters:
 
         # Check that the supercell contains the correct number of atoms
         if len(self["atoms"])*lcm != len(sup["atoms"]):
+            print("Length of supercell = {0} (target = {1})".format(len(sup["atoms"]), len(self["atoms"])*lcm))
             raise Exception("Supercell does not contain the correct number of atoms!")
 
         self.eval_symmetry()
@@ -653,7 +654,7 @@ class parameters:
     # Apply a phonon of the given wavevector (q) and amplitude (amp).
     # Returns a parameters object describing the perturbed cell
     # the target energy is in meV/atom
-    def apply_phonon(self, q, mode, target_energy=1.0, modes_file="ph_interp.modes", use_closest=False):
+    def apply_phonon(self, q, mode, target_energy=1.0, modes_file="ph_interp.modes", use_closest=False, return_freq=False):
 
         # Parse the modes file for the eigenvectors
         from qet.parser import phonon_interp_modes
@@ -710,8 +711,6 @@ class parameters:
             m = masses[self["atoms"][i][0]] 
             dmd += m * sum([x*x for x in evec[i]])
 
-        print(freq, dmd, target_energy)
-
         # Work out the amplitude needed to obtain the target energy
         # (I'm afraid of units, so work in S.I)
         from qet.constants import EV_TO_J, AMU_TO_KG, CMM1_TO_HZ, ANGSTROM_TO_M
@@ -725,16 +724,24 @@ class parameters:
         dmd = dmd * AMU_TO_KG * ANGSTROM_TO_M * ANGSTROM_TO_M
 
         # Convert freq to HZ
+        freq_cmm = freq
         freq = freq * CMM1_TO_HZ 
 
         # Work out amplitude by inverting E = 0.5 w^2 amp^2 dmd
         amp  = 2 * target_energy / (dmd * freq * freq)
         amp  = amp ** 0.5
+
+        if amp > 10:
+            print("Phonon amplitude is large ({0})".format(amp))
+            print("Perhaps the phonon frequency ({0} cm^-1) is too small".format(freq_cmm))
+            print("Setting the amplitude to zero")
+            amp = 0.0
+
         evec = [[x*amp for x in e] for e in evec]
 
-        print(amp)
-
-        return self.generate_commensurate_supercell(q, apply_eigenvector=evec)
+        ss = self.generate_commensurate_supercell(q, apply_eigenvector=evec)
+        if return_freq: return ss, freq_cmm
+        else: return ss
 
 
     ####################
@@ -884,9 +891,15 @@ class parameters:
 
             # Write other parameters
             for p in self.par:
-                if p == "atoms":       continue
+
+                # Already written
+                if p == "atoms":       continue 
                 if p == "lattice":     continue
                 if p == "pseudo_dirs": continue
+
+                # Don't write
+                if p == "bz_path":                 continue
+                if p == "high_symmetry_bz_points": continue
 
                 val = self.par[p]
 
