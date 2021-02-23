@@ -523,7 +523,8 @@ class parameters:
     # that can support explicit pertubations with wavevector k_p).
     # If apply_eigenvector is set, and has dimensions 
     # #atoms x 3, then a phonon mode of the form eigenvector * cos(k_p dot R)
-    # will be applied to the resulting structure.
+    # will be applied to the resulting structure. Apply_eigenvector is assumeed 
+    # to be in units of angstrom.
     def generate_commensurate_supercell(self, k_p, apply_eigenvector=None):
         import math
         import numpy as np
@@ -626,6 +627,7 @@ class parameters:
                             phase      = np.cos(np.dot(k_p, [dx+a[1][0], dy+a[1][1], dz+a[1][2]])*np.pi*2)
                             image_pos += phase * np.array(apply_eigenvector[ai]) 
 
+                        # Get fraction coordinates in the supercell
                         frac_pos_sup = np.dot(superlat_inv, image_pos)
 
                         # If x is in the first supercell, add it to the supercell atoms
@@ -650,7 +652,8 @@ class parameters:
 
     # Apply a phonon of the given wavevector (q) and amplitude (amp).
     # Returns a parameters object describing the perturbed cell
-    def apply_phonon(self, q, mode, amp, modes_file="ph_interp.modes", use_closest=False):
+    # the target energy is in meV/atom
+    def apply_phonon(self, q, mode, target_energy=1.0, modes_file="ph_interp.modes", use_closest=False):
 
         # Parse the modes file for the eigenvectors
         from qet.parser import phonon_interp_modes
@@ -658,6 +661,7 @@ class parameters:
 
         qpts  = modes["q-points"]
         evecs = modes["eigenvectors"]
+        freqs = modes["frequencies"]
 
         # Find the closest q-point to the requested one
         disp = lambda q1, q2 : sum((q1[i]-q2[i])*(q1[i]-q2[i]) for i in range(3))
@@ -688,6 +692,47 @@ class parameters:
         evec = evecs[min_i*modes_per_q+mode]
         if modes_per_q != len(evec)*3:
             raise Exception("#modes != #atoms * 3")
+            
+        # Work out the displacement that corresponds to
+        # the requested energy
+
+        # Get the frequency of this phonon
+        freq = freqs[min_i*modes_per_q+mode]
+
+        # Calculate d^T M d where d is the displacement
+        # and m is the mass tensor
+        dmd = 0
+        masses = {}
+        for s in self["species"]:
+            masses[s[0]] = s[1]
+
+        for i, v in enumerate(evec):
+            m = masses[self["atoms"][i][0]] 
+            dmd += m * sum([x*x for x in evec[i]])
+
+        print(freq, dmd, target_energy)
+
+        # Work out the amplitude needed to obtain the target energy
+        # (I'm afraid of units, so work in S.I)
+        from qet.constants import EV_TO_J, AMU_TO_KG, CMM1_TO_HZ, ANGSTROM_TO_M
+
+        # Convert energy to joules per supercell (from meV/atom)
+        target_energy = target_energy * len(evec) * EV_TO_J / 1000.0
+
+        # Convert mass to KG and length from Angstrom to M
+        # (using angstrom here so that the displacement we pass to 
+        #  generate_commensurate_supercell will be in angstrom)
+        dmd = dmd * AMU_TO_KG * ANGSTROM_TO_M * ANGSTROM_TO_M
+
+        # Convert freq to HZ
+        freq = freq * CMM1_TO_HZ 
+
+        # Work out amplitude by inverting E = 0.5 w^2 amp^2 dmd
+        amp  = 2 * target_energy / (dmd * freq * freq)
+        amp  = amp ** 0.5
+        evec = [[x*amp for x in e] for e in evec]
+
+        print(amp)
 
         return self.generate_commensurate_supercell(q, apply_eigenvector=evec)
 

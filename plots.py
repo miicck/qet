@@ -593,10 +593,11 @@ def plot_tc_vs_smearing(directories=["./"],
     lam_rel = None
 
     if plot_lambda:
-        tc_plot = plt.subplot(211)
-        lam_plot= plt.subplot(212)
+        tc_plot  = plt.subplot(211)
+        lam_plot = plt.subplot(212)
     else:
-        tc_plot = plt.subplot(111)
+        tc_plot  = plt
+        lam_plot = None
 
     # Will contain the method used to evaluate Tc
     method = "None"
@@ -651,10 +652,10 @@ def plot_tc_vs_smearing(directories=["./"],
                     # Get tc for two different mu* values
                     tcs, lam = tc_from_a2f_allen_dynes(f, mu_stars=mu_stars, 
                         attenuation_freq=attenuation_freq, get_lambda=True)
-                    tcs1.append([n, tcs[mu_stars[0], lam]])
-                    tcs2.append([n, tcs[mu_stars[1], lam]])
+                    tcs1.append([n, tcs[mu_stars[0]], lam])
+                    tcs2.append([n, tcs[mu_stars[1]], lam])
                 except Exception as e:
-                    print("Exception in Allen-Dynes  TC: "+str(e))
+                    print("Exception in Allen-Dynes TC: "+str(e))
                     continue
 
         # No data => skip
@@ -701,7 +702,10 @@ def plot_tc_vs_smearing(directories=["./"],
 
         tc_plot.fill_between(ns, tc1, tc2, alpha=0.25, label=directory) 
         tc_plot.plot(ns, tc2, linestyle="none", marker="+")
-        tc_plot.set_ylabel("$T_C$ ({0} with $\\mu^* \\in \; [{1}, {2}]$)".format(method, *mu_stars))
+        if lam_plot:
+            tc_plot.set_ylabel("$T_C$ ({0} with $\\mu^* \\in \; [{1}, {2}]$)".format(method, *mu_stars))
+        else:
+            tc_plot.ylabel("$T_C$ ({0} with $\\mu^* \\in \; [{1}, {2}]$)".format(method, *mu_stars))
         tc_plot.legend()
 
         if not lam_plot is None:

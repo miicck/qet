@@ -716,17 +716,17 @@ def tc_from_gap_function(filename, plot=False):
             gs.append(vals[1]/vals[2])
 
     # Interpolate g(t) data to a finer grid
-    ts_interp = np.linspace(min(ts), max(ts), len(ts)*5)
-    gs_interp = [np.interp(t, ts, gs) for t in ts_interp]
-    ts = ts_interp
-    gs = gs_interp
+    #ts_interp = np.linspace(min(ts), max(ts), len(ts)*5)
+    #gs_interp = [np.interp(t, ts, gs) for t in ts_interp]
+    #ts = ts_interp
+    #gs = gs_interp
 
-    # Guess tc from just above where gap first goes above
+    # Guess tc from just where gap first goes above
     # 5% of the maximum on decreasing Tc
     tc_guess = 0
     for i in range(len(ts)-1, -1, -1):
-        if gs[i] > 0.05 * max(gs): break
         tc_guess = ts[i]
+        if gs[i] > 0.05 * max(gs): break
 
     def gap_model(t, tc, gmax):
         t = np.array([min(ti, tc) for ti in t])
@@ -739,7 +739,8 @@ def tc_from_gap_function(filename, plot=False):
         if plot:
             import matplotlib.pyplot as plt
             plt.plot(ts, gs, marker="+", label="data")
-            plt.plot(ts, gap_model(ts, *par), marker="+", label="fit")
+            ts_interp = np.linspace(min(ts), max(ts), 200)
+            plt.plot(ts_interp, gap_model(ts_interp, *par), label="fit")
             plt.axvline(par[0], color="black", linestyle=":", label="Tc = "+str(par[0]))
             plt.legend()
             plt.show()
