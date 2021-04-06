@@ -278,6 +278,7 @@ def plot_ebands(filename="./e_bands.in"):
     exp_count = None
     kpoints   = []
     labels    = {}
+    kpoints_at_labels = {}
     with open(filename) as f:
         for line in f:
             if not start:
@@ -289,11 +290,12 @@ def plot_ebands(filename="./e_bands.in"):
                 exp_count = int(line)
                 continue
 
-            if "!" in line:
-                labels[len(kpoints)] = line.split("!")[-1].strip()
-
             k = [float(x) for x in line.split()[0:3]]
             kpoints.append(k)
+
+            if "!" in line:
+                labels[len(kpoints)-1] = line.split("!")[-1].strip()
+                kpoints_at_labels[len(kpoints)-1] = k
 
     e_fermi = None
     outf = filename.replace(".in", ".out")
@@ -319,7 +321,7 @@ def plot_ebands(filename="./e_bands.in"):
 
     for i in labels:
         plt.axvline(i, color="black", linestyle=":")
-    plt.xticks([i for i in labels], [labels[i] for i in labels])
+    plt.xticks([i for i in labels], [labels[i] + str(kpoints_at_labels[i]) for i in labels], rotation=90)
     plt.ylabel("Energy (eV)")
 
     plt.show()
@@ -679,8 +681,10 @@ def plot_tc_vs_smearing(directories=["./"],
             with open(f) as of:
                 for line in of:
                     if "el_ph_sigma" in line:
-                        el_ph_sigma = float(line.split("=")[-1].replace(",",""))
-                        break
+                        try:
+                            el_ph_sigma = float(line.split("=")[-1].replace(",",""))
+                        except:
+                            continue
 
         # Label with what we're plotting on the x-axis
         if el_ph_sigma is None: 
@@ -714,10 +718,10 @@ def plot_tc_vs_smearing(directories=["./"],
             lam_plot.legend()
 
     if not plot_over_1000:
-        if plt.ylim()[1] > 1000.0:
+        if tc_plot.get_ylim()[1] > 1000.0:
             print("Found T_C > 1000 K, rescaling axis")
             print(tc1)
-            plt.ylim([-10,1000])
+            tc_plot.set_ylim([-10,1000])
 
     plt.legend()
     if show: plt.show()
@@ -840,7 +844,7 @@ def main():
 
     # The possible tasks to invoke
     invoke_list = {
-        "tc_vs_smearing"      : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq, plot_lambda=True),
+        "tc_vs_smearing"      : lambda : plot_tc_vs_smearing(sys.argv[2:], ask=ask, plot_relative=rel, plot_over_1000=p1000, attenuation_freq=att_freq, plot_lambda=True, mu_stars=mu_stars),
         "tc_vs_smearing_ad"   : lambda : plot_tc_vs_smearing(sys.argv[2:], force_allen_dynes=True, ask=ask, plot_relative=rel),
         "tc_vs_smearing_both" : lambda : plot_tc_vs_smearing_both(sys.argv[2:], plot_relative=rel, mu_stars=mu_stars),
         "a2f"                 : lambda : plot_a2f(sys.argv[2], safe=safe),

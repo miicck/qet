@@ -766,13 +766,14 @@ def tc_from_gap_function(filename, plot=False):
     return tc, err
 
 # Calculate TC by solving the eliashberg equations (requires elk)
-def tc_from_a2f_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
+def tc_from_a2f_file_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
     out = parser.a2f_dos_out(filename)
     wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
     ws  = [w for w,a in wa]
     a2f = [a for w,a in wa]
     dosn = filename.split("dos")[-1]
-    tc_dir = os.path.basedir(filename)+ "/tc_dos_" + dosn
+    basedir = "/".join(filename.split("/")[0:-1])
+    tc_dir = basedir + "/tc_dos_" + dosn
     return tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=mu_stars, force=force)
 
 # Calculate TC by solving the eliashberg equations (requires elk)
@@ -868,7 +869,7 @@ def tc_from_a2f_eliashberg_recursive(root_dir):
         if not "a2F.dos" in f: continue
         log("Calculating Tc for "+f, "tc.log")
         try: 
-            tc_res = tc_from_a2f_eliashberg(f)
+            tc_res = tc_from_a2f_file_eliashberg(f)
             log("Success", "tc.log")
             for mu in tc_res:
                 log("    Mu = {0}, Tc = {1}".format(mu, tc_res[mu]), "tc.log")

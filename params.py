@@ -505,7 +505,9 @@ class parameters:
         # Work out the number of symmetry ops
         os.system("c2x --symmetry "+TMP_CELL+" > /dev/null 2>"+TMP_SYMM)
         with open(TMP_SYMM) as f:
-            self["sym_ops"] = int(f.read().split()[1])
+            read = f.read().strip()
+            if "\n" in read: read = read.split("\n")[-1]
+            self["sym_ops"] = int(read.split()[1])
 
         # Work out the space group
         os.system("c2x --int "+TMP_CELL+" 2>"+TMP_SYMM)
@@ -525,7 +527,7 @@ class parameters:
     # #atoms x 3, then a phonon mode of the form eigenvector * cos(k_p dot R)
     # will be applied to the resulting structure. Apply_eigenvector is assumeed 
     # to be in units of angstrom.
-    def generate_commensurate_supercell(self, k_p, apply_eigenvector=None):
+    def generate_commensurate_supercell(self, k_p, apply_eigenvector=None, return_disp=False):
         import math
         import numpy as np
         from fractions import Fraction
@@ -606,6 +608,7 @@ class parameters:
         max_delta = max(ss)*4
         frac_eps  = 1e-4
         ss_atoms  = []
+        ss_disps  = []
 
         # Work out where the atoms go in the supercell
         for ai, a in enumerate(self["atoms"]):
@@ -624,8 +627,9 @@ class parameters:
 
                         # Apply phonon pertubation if eigenvector is provided
                         if not apply_eigenvector is None:
-                            phase      = np.cos(np.dot(k_p, [dx+a[1][0], dy+a[1][1], dz+a[1][2]])*np.pi*2)
-                            image_pos += phase * np.array(apply_eigenvector[ai]) 
+                            phase = np.cos(np.dot(k_p, [dx+a[1][0], dy+a[1][1], dz+a[1][2]])*np.pi*2)
+                            delta = phase * np.array(apply_eigenvector[ai]) 
+                            image_pos += delta
 
                         # Get fraction coordinates in the supercell
                         frac_pos_sup = np.dot(superlat_inv, image_pos)
@@ -634,6 +638,7 @@ class parameters:
                         # (exclude atoms at 1.0 because we're including atoms at 0.0)
                         if all([x > -frac_eps and x < 1-frac_eps for x in frac_pos_sup]):
                             ss_atoms.append([a[0], frac_pos_sup])
+                            ss_disps.append(delta)
 
         # Build the supercell
         sup = self.copy()
@@ -649,12 +654,15 @@ class parameters:
         sup.eval_symmetry()
         print("Symmetry before: {0} Symmetry after: {1}".format(self["space_group_name"], sup["space_group_name"]))
 
-        return sup
+        ret = [sup]
+        if return_disp: ret.append(ss_disps)
+        if len(ret) == 1: return ret[0]
+        return ret
 
     # Apply a phonon of the given wavevector (q) and amplitude (amp).
     # Returns a parameters object describing the perturbed cell
     # the target energy is in meV/atom
-    def apply_phonon(self, q, mode, target_energy=1.0, modes_file="ph_interp.modes", use_closest=False, return_freq=False):
+    def apply_phonon(self, q, mode, target_energy=1.0, modes_file="ph_interp.modes", use_closest=False, return_freq=False, return_evec=False, return_disp=False):
 
         # Parse the modes file for the eigenvectors
         from qet.parser import phonon_interp_modes
@@ -739,9 +747,13 @@ class parameters:
 
         evec = [[x*amp for x in e] for e in evec]
 
-        ss = self.generate_commensurate_supercell(q, apply_eigenvector=evec)
-        if return_freq: return ss, freq_cmm
-        else: return ss
+        ss, disp = self.generate_commensurate_supercell(q, apply_eigenvector=evec, return_disp=True)
+        ret = [ss]
+        if return_freq: ret.append(freq_cmm)
+        if return_evec: ret.append(evec)
+        if return_disp: ret.append(disp)
+        if len(ret) == 1: return ret[0]
+        return ret
 
 
     ####################
