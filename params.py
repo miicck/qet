@@ -139,6 +139,28 @@ class parameters:
 
             return spec
 
+        if key == "a": return np.linalg.norm(self["lattice"][0])
+        if key == "b": return np.linalg.norm(self["lattice"][1])
+        if key == "c": return np.linalg.norm(self["lattice"][2])
+
+        if key == "alpha":
+            lat = self["lattice"]
+            ret = np.dot(lat[1], lat[2])
+            ret = np.arccos(ret)*180/np.pi
+            return ret
+
+        if key == "beta":
+            lat = self["lattice"]
+            ret = np.dot(lat[0], lat[2])
+            ret = np.arccos(ret)*180/np.pi
+            return ret
+
+        if key == "gamma":
+            lat = self["lattice"]
+            ret = np.dot(lat[0], lat[1])
+            ret = np.arccos(ret)*180/np.pi
+            return ret
+
         # Work out the space group
         if key == "space_group_name":
             self.eval_symmetry()
