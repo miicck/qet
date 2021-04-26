@@ -29,12 +29,10 @@ def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
     s = ""
 
     # Cell parameters card
-    # (only specified if a,b,c alph, beta, gamma aren't
-    if not params.contains_key("a"):
-        s += "CELL_PARAMETERS (angstrom)\n"
-        s += "{0} {1} {2}\n".format(*params["lattice"][0])
-        s += "{0} {1} {2}\n".format(*params["lattice"][1])
-        s += "{0} {1} {2}\n".format(*params["lattice"][2])
+    s += "CELL_PARAMETERS (angstrom)\n"
+    s += "{0} {1} {2}\n".format(*params["lattice"][0])
+    s += "{0} {1} {2}\n".format(*params["lattice"][1])
+    s += "{0} {1} {2}\n".format(*params["lattice"][2])
 
     # Atomic species card
     s += "\nATOMIC_SPECIES\n"
@@ -85,16 +83,23 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += "&SYSTEM\n"
     s += params.to_input_line("ntyp")
     s += params.to_input_line("nat")
+
+    explicit_symm = False
     if params.contains_key("space_group"):
+        explicit_symm = True
         s += params.to_input_line("space_group")
-    else:
+    elif params.contains_key("ibrav"):
+        explicit_symm = True
         s += params.to_input_line("ibrav")
-    s += params.to_input_line("a")
-    s += params.to_input_line("b")
-    s += params.to_input_line("c")
-    s += params.to_input_line("cosab")
-    s += params.to_input_line("cosbc")
-    s += params.to_input_line("cosac")
+
+    if explicit_symm:
+        s += params.to_input_line("a")
+        s += params.to_input_line("b")
+        s += params.to_input_line("c")
+        s += params.to_input_line("cosab")
+        s += params.to_input_line("cosbc")
+        s += params.to_input_line("cosac")
+
     s += params.to_input_line("ecutwfc")
     s += params.to_input_line("ecutrho")
     s += params.to_input_line("occupations")
