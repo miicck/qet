@@ -282,15 +282,18 @@ class calculation:
             bin = self.in_params["path_override"]
             if len(bin) > 0: bin += "/"
 
+            # Get the thing that we will run mpi with
+            mpirun = self.in_params["mpirun"]
+
             try:
                 # Check if mpirun accepts -ppn flag
-                subprocess.check_output(["mpirun", "-ppn", "1", "ls"])
-                cmd = "cd {0}; mpirun -ppn {1} -np {2} {3} {4} -i {5} > {6}"
-                cmd = cmd.format(path, ppn, np, bin + self.exe(), qe_flags, inf, outf)
+                subprocess.check_output([mpirun, "-ppn", "1", "ls"])
+                cmd = "cd {0}; {1} -ppn {2} -np {3} {4} {5} -i {6} > {7}"
+                cmd = cmd.format(path, mpirun, ppn, np, bin + self.exe(), qe_flags, inf, outf)
             except:
                 # Doesn't accept -ppn flag
-                cmd = "cd {0}; mpirun -np {1} {2} {3} -i {4} > {5}"
-                cmd = cmd.format(path, np, bin + self.exe(), qe_flags, inf, outf)
+                cmd = "cd {0}; {1} -np {2} {3} {4} -i {5} > {6}"
+                cmd = cmd.format(path, mpirun, np, bin + self.exe(), qe_flags, inf, outf)
 
             log("Running:\n"+cmd)
 
@@ -918,7 +921,6 @@ def calculate_tc(parameters,
 
     log("Tc calculation using parameters:")
     log(str(parameters))
-    log("Using mpirun: "+str(subprocess.check_output("which mpirun", shell=True)))
 
     # Get the k-point grid sizes
     # needed to determine the most sensible

@@ -60,6 +60,7 @@ class parameters:
         self["bz_path_points"]   = 100               # the approximate number of points along a BZ path
         self["total_walltime"]   = 129600            # allocated walltime in seconds (negative => treat as infinite)
         self["tidy_up_time"]     = 1800              # time reserved for tidying up at end of total_walltime
+        self["mpirun"]           = "mpirun"          # The mpi runner that we want to use
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
