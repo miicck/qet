@@ -89,7 +89,8 @@ def pw_control_input(params, calculation="scf", recover=False):
         explicit_symm = True
         s += params.to_input_line("space_group")
     elif params.contains_key("ibrav"):
-        explicit_symm = True
+        if params["ibrav"] != 0:
+            explicit_symm = True
         s += params.to_input_line("ibrav")
 
     if explicit_symm:
