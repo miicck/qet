@@ -4,7 +4,6 @@ QET automates the process of setting up, parallelising and running jobs in Quant
 calculations in series to build up high-throughput workflows.
 
 # Overview
-![Alt text](./overview.svg)
 <img src="./overview.svg">
 
 # Example usage
