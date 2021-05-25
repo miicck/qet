@@ -4,6 +4,10 @@ QET automates the process of setting up, parallelising and running jobs in Quant
 calculations in series to build up high-throughput workflows.
 
 # Overview
+![Alt text](./overview.svg)
+<img src="./overview.svg">
+
+# Example usage
 In order to get an idea of how the various parts of QET work together, we're going to take a look at how the 
 `examples/ternary_optimizer.py` example works. This example takes a set of ternary-hydride superconductors and applies
 alchemical mutations to construct a network of new materials. This network will grow in such a way as to maximize the fraction
