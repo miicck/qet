@@ -30,9 +30,11 @@ def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
 
     # Cell parameters card
     s += "CELL_PARAMETERS (angstrom)\n"
-    s += "{0} {1} {2}\n".format(*params["lattice"][0])
-    s += "{0} {1} {2}\n".format(*params["lattice"][1])
-    s += "{0} {1} {2}\n".format(*params["lattice"][2])
+
+    exp = params["expand"]
+    s += "{0} {1} {2}\n".format(*[exp*x for x in params["lattice"][0]])
+    s += "{0} {1} {2}\n".format(*[exp*x for x in params["lattice"][1]])
+    s += "{0} {1} {2}\n".format(*[exp*x for x in params["lattice"][2]])
 
     # Atomic species card
     s += "\nATOMIC_SPECIES\n"
@@ -122,12 +124,15 @@ def pw_control_input(params, calculation="scf", recover=False):
     s += params.to_input_line("conv_thr")
     s += "/\n\n"
 
-    if calculation == "vc-relax":
+
+    if "relax" in calculation:
 
         # Ions namelist
         s += "&IONS\n"
         s += params.to_input_line("ion_dynamics")
         s += "/\n\n"
+
+    if calculation == "vc-relax":
 
         # Cell namelist
         s += "&CELL\n"
@@ -487,12 +492,23 @@ class relax(calculation):
 
         # Control
         s  = pw_control_input(self.in_params, 
-            calculation="vc-relax", recover=recover)
+            calculation=self.relax_calculation(), 
+            recover=recover)
 
         # Geometry
         s += input_geometry(self.in_params)
 
         return pad_input_file(s)
+
+    def relax_calculation(self):
+        return "vc-relax"
+
+# Overloaded version of relax, to carry out relaxation
+# of just the atomic posiitons
+class fixed_cell_relax(relax):
+
+    def relax_calculation(self):
+        return "relax"
 
 # Calculate phonons on a grid
 class phonon_grid(calculation):
@@ -775,7 +791,7 @@ def tc_from_gap_function(filename, plot=False):
     return tc, err
 
 # Calculate TC by solving the eliashberg equations (requires elk)
-def tc_from_a2f_file_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
+def tc_from_a2f_file_eliashberg(filename, mu_stars=[0.1, 0.15], force=False, species_dir=None):
     out = parser.a2f_dos_out(filename)
     wa  = [[w,max(a,0)] for w,a in zip(out["frequencies"], out["a2f"]) if w > 0]
     ws  = [w for w,a in wa]
@@ -783,10 +799,10 @@ def tc_from_a2f_file_eliashberg(filename, mu_stars=[0.1, 0.15], force=False):
     dosn = filename.split("dos")[-1]
     basedir = "/".join(filename.split("/")[0:-1])
     tc_dir = basedir + "/tc_dos_" + dosn
-    return tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=mu_stars, force=force)
+    return tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=mu_stars, force=force, species_dir=species_dir)
 
 # Calculate TC by solving the eliashberg equations (requires elk)
-def tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=[0.1, 0.15], force=False):
+def tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=[0.1, 0.15], force=False, species_dir=None):
     import warnings
     from   subprocess import check_output
 
@@ -818,10 +834,11 @@ def tc_from_a2f_eliashberg(tc_dir, ws, a2f, mu_stars=[0.1, 0.15], force=False):
     # First, estimate Tc using the allen-dynes equation
     tc_ad = tc_allen_dynes(ws,a2f,mu_stars=mu_stars)
     
-    # Find the elk species directory
-    elk_base_dir = check_output(["which", "elk"])
-    elk_base_dir = elk_base_dir.decode("utf-8").replace("src/elk\n","")
-    species_dir  = elk_base_dir + "/species/"
+    if species_dir is None:
+        # Find the elk species directory
+        elk_base_dir = check_output(["which", "elk"])
+        elk_base_dir = elk_base_dir.decode("utf-8").replace("src/elk\n","")
+        species_dir  = elk_base_dir + "/species/"
 
     tc_eliashberg = {}
     for mu in mu_stars:
@@ -871,14 +888,14 @@ def listfiles(folder):
 
 # Traverse all subdirectories, calculating Tc for every
 # a2F.dos file we find
-def tc_from_a2f_eliashberg_recursive(root_dir):
+def tc_from_a2f_eliashberg_recursive(root_dir, species_dir=None):
 
     # Run over all a2F.dos files and calculate Tc
     for f in listfiles(root_dir):
         if not "a2F.dos" in f: continue
         log("Calculating Tc for "+f, "tc.log")
         try: 
-            tc_res = tc_from_a2f_file_eliashberg(f)
+            tc_res = tc_from_a2f_file_eliashberg(f, species_dir=species_dir)
             log("Success", "tc.log")
             for mu in tc_res:
                 log("    Mu = {0}, Tc = {1}".format(mu, tc_res[mu]), "tc.log")
@@ -959,9 +976,13 @@ def calculate_tc(parameters,
 
             # relax the structure
             parameters["la2F"] = False # We don't need the a2F flag for the relaxation
-            res = relax(parameters).run()
+            if parameters["variable_cell"]:
+                res = relax(parameters).run()
+            else:
+                res = fixed_cell_relax(parameters).run()
             parameters["atoms"]   = res["relaxed atoms"]
-            parameters["lattice"] = res["relaxed lattice"]
+            if "relaxed lattice" in res:
+                parameters["lattice"] = res["relaxed lattice"]
 
             # Calculate the projected density of states/bandstructure
             try:

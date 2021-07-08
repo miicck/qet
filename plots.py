@@ -556,14 +556,6 @@ def plot_tc_vs_smearing(directories=["./"],
     if not attenuation_freq is None:
         attenuation_freq *= constants.CMM1_TO_RY
 
-    # If only one directory is given, 
-    # include also subdirectories
-    if len(directories) == 1:
-        for d in os.listdir(directories[0]):
-            d = directories[0]+"/"+d
-            if not os.path.isdir(d): continue
-            directories.append(d)
-
     if len(directories) == 0:
         print("No directories to plot in tc_vs_smearing!")
         return
@@ -636,7 +628,7 @@ def plot_tc_vs_smearing(directories=["./"],
                     mu_dir = elk_dir + "/" + mu_dir
                     tc_f   = mu_dir + "/tc.out"
                     if not os.path.isfile(tc_f): continue
-                    
+
                     with open(tc_f) as f:
                         for line in f:
                             if "liashberg" in line:
@@ -718,10 +710,12 @@ def plot_tc_vs_smearing(directories=["./"],
             lam_plot.legend()
 
     if not plot_over_1000:
-        if tc_plot.get_ylim()[1] > 1000.0:
+        axes = tc_plot
+        if tc_plot == plt: axes=tc_plot.gca()
+        if axes.get_ylim()[1] > 1000.0:
             print("Found T_C > 1000 K, rescaling axis")
             print(tc1)
-            tc_plot.set_ylim([-10,1000])
+            axes.set_ylim([-10,1000])
 
     plt.legend()
     if show: plt.show()

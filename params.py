@@ -61,6 +61,8 @@ class parameters:
         self["total_walltime"]   = 129600            # allocated walltime in seconds (negative => treat as infinite)
         self["tidy_up_time"]     = 1800              # time reserved for tidying up at end of total_walltime
         self["mpirun"]           = "mpirun"          # The mpi runner that we want to use
+        self["expand"]           = 1.0               # How much to expand lattice vectors by
+        self["variable_cell"]    = True              # Should the lattice be allowed to vary
 
         # By default, assume cores_per_node is
         # equal to the number of cores where the
