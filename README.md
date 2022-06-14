@@ -13,7 +13,7 @@ alchemical mutations to construct a network of new materials. This network will 
 of electronic density of states at the fermi level that originates from the hydrogen atoms. This is closely related to
 how good the resulting superconductor is. First, we import the various tools we'll need:
 
-```
+```python
 from qet.calculations               import relax, proj_dos       # Basic QE calculation types that we will use
 from qet.alchemy.network            import alch_network          # The alchemical optimization method that we will use
 from qet.alchemy                    import mutations             # The alchemical moves that we will employ
@@ -25,7 +25,7 @@ For example, `qet.alchemy` contains the basic mutations that all alchemical meth
 contains tools specific to an alchemical network. Next, we define a our objective function, which uses the basic calculation
 types contained within `qet.calculations` to evaluate the hydrogen-derived density of states at the fermi level:
 
-```
+```python
 def h_dos(structure):
 
     # Relax the structure
@@ -64,7 +64,7 @@ of the material in question. It's state is defined by a minimal structure and pa
 methods for accessing that information and derived information. Using these methods, we setup a constaint on the 
 types of structures that we are willing to consider. In this case, this consists of only ternary structures with 
 up to 6 non-hydrogen elements and between 1 and 8 hydrogens per non-hydrogen:
-```
+```python
 def is_valid(structure):
     
     MAX_NON_H = 6
@@ -89,7 +89,7 @@ def is_valid(structure):
 
 Finally, we construct an alchemical network and expand it in order to maximize the hydrogen-derived density of
 states at the fermi level:
-```
+```python
 # Load/create the network
 nw = alch_network("network")
 
