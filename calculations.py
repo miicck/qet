@@ -19,7 +19,9 @@ def pad_input_file(s):
             pad = " "*(maxi-i)
             l = l[0:i] + pad + l[i:]
         snew += l + "\n"
-    return snew.strip()
+
+    # Ensure there is a newline at the end, otherwise QE might crash 
+    return snew.strip() + "\n" 
 
 # Get the geompetry part of an input file
 def input_geometry(params, explicit_kpoints=None, kpoint_labels={}):
@@ -620,11 +622,10 @@ class q2r(calculation):
     def gen_input_file(self, recover=False):
 
         s  = "&INPUT\n"
+        s += self.in_params.to_input_line("zasr")
         s += self.in_params.to_input_line("fildyn")
         s += self.in_params.to_input_line("flfrc")
-        s += self.in_params.to_input_line("zasr")
         s += self.in_params.to_input_line("la2F")
-        s += self.in_params.to_input_line("el_ph_nsigma")
         s += "/\n"
 
         return pad_input_file(s)
@@ -652,7 +653,7 @@ class interpolate_phonon(calculation):
     def gen_input_file(self, recover=False):
 
         s  = "&INPUT\n"
-        s += "dos = .true.\n"
+        s += "    dos = .true.,\n"
         s += self.in_params.to_input_line("flfrc")
         s += self.in_params.to_input_line("zasr",          name="asr")
         s += self.in_params.to_input_line("ph_interp_nq1", name="nk1")
