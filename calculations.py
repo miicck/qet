@@ -626,6 +626,7 @@ class q2r(calculation):
         s += self.in_params.to_input_line("fildyn")
         s += self.in_params.to_input_line("flfrc")
         s += self.in_params.to_input_line("la2F")
+        s += self.in_params.to_input_line("el_ph_nsigma")
         s += "/\n"
 
         return pad_input_file(s)
